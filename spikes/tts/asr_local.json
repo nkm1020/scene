@@ -1,0 +1,30 @@
+[
+  {
+    "file": "local_preset_ko_sohee.wav",
+    "lang": "ko",
+    "text": "야 금요일 7시 다 모여",
+    "asr": "야 금요일 7시 다 보여?",
+    "cer": 0.111
+  },
+  {
+    "file": "local_clone_ko_secret.wav",
+    "lang": "ko",
+    "text": "제이한테는 비밀",
+    "asr": "제이한테는 비밀",
+    "cer": 0.0
+  },
+  {
+    "file": "local_clone_en_cake.wav",
+    "lang": "en",
+    "text": "you can't bring your own cake",
+    "asr": "You can't bring your own cage.",
+    "cer": 0.043
+  },
+  {
+    "file": "local_ref_ko_sohee_12s.wav",
+    "lang": "ko",
+    "text": "안녕, 나는 이번 주 금요일 파티를 준비하고 있어. 다들 일곱 시까지 거실에 모여서 조용히 기다려 줘. 케이크는 내가 가져갈 테니까 너희는 풍선만 챙겨 와.",
+    "asr": "안녕, 나는 이번 주 금요일 파티를 준비하고 있어. 다들 7시까지 거실에 모여서 조용히 기다려줘. 내가 가져갈 테니까 너희는 풍선만 챙겨와.",
+    "cer": 0.1
+  }
+]

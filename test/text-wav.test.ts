@@ -9,9 +9,19 @@ describe("read-back comparison", () => {
   });
   it("passes Korean read-backs with number words and fails different sentences", () => {
     expect(similarity("야 금요일 7시 다 모여", "야 금요일 일곱 시 다 모여")).toBeGreaterThan(0.85);
+    expect(similarity("야 금요일 7시 다 모여", "야 금요일 7시 다 모여")).toBe(1);
+    expect(similarity("7월에 보자", "칠월에 보자")).toBeGreaterThan(0.85);
+    expect(similarity("ok Friday 7pm", "okay Friday seven PM")).toBeGreaterThan(0.85);
     expect(similarity("제이한테는 비밀", "제이한테 다 말해")).toBeLessThan(0.85);
-    expect(similarity("you can't bring your own cake", "you can bring your own cake")).toBeGreaterThan(0.85); // known limit: negation by one letter
     expect(similarity("wrong chat", "this is the only chat we have")).toBeLessThan(0.6);
+  });
+  it("fails garbled read-backs (accented preset reading English)", () => {
+    // Real case from Nov 3: a Korean-native preset read an English line; Voice Transcribe code-switched.
+    expect(similarity("ok so who is bringing the cake lol", "약 그 So who's bringing the cake으로..")).toBeLessThan(0.85);
+    expect(similarity("ok so who is bringing the cake lol", "ok so who's bringing the cake lol")).toBeGreaterThan(0.85);
+  });
+  it("documents a known limit: a one-letter negation can pass", () => {
+    expect(similarity("you can't bring your own cake", "you can bring your own cake")).toBeGreaterThan(0.85);
   });
   it("detects emoji-only messages and language", () => {
     expect(isSilent("🎂🎂🎂")).toBe(true);

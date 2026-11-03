@@ -8,7 +8,7 @@ import { Ledger } from "../src/core/ledger";
 import { SEED_MEMBERS, SEED_MESSAGES } from "../src/core/seed";
 import { directSegment } from "../src/core/director";
 import { renderVoice } from "../src/core/voice";
-import { presetFor, ttsEndpoint } from "../src/core/tts";
+import { ttsEndpoint } from "../src/core/tts";
 
 const TPL = "demo-template";
 const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
@@ -36,7 +36,7 @@ console.log("director", run.source, run.log.map((l) => (l.ok ? "✓" : "✗")).j
 for (const msg of SEED_MESSAGES) {
   const d = run.directions.find((x) => x.message_id === msg.id)!;
   const member = SEED_MEMBERS.find((m) => m.id === msg.sender_id)!;
-  const r = await renderVoice(msg.text, voiceOn ? { preset: presetFor(member.preset) } : null, { ledger });
+  const r = await renderVoice(msg.text, voiceOn ? { presetKey: member.preset } : null, { ledger });
   let audio_url: string | null = null;
   if (r.wav) {
     const path = `${TPL}/${msg.id}.wav`;

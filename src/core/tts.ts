@@ -17,15 +17,21 @@ export function ttsEndpoint(): string | null {
   return url ? url.replace(/\/$/, "") : null;
 }
 
-/** Default preset voices (Qwen3-TTS CustomVoice). */
-export const PRESETS = {
-  female_a: "sohee",
-  female_b: "serena",
-  male: "ryan",
-} as const;
+/**
+ * Preset voices (Qwen3-TTS CustomVoice speakers) per language. Chosen by reading samples back with
+ * Voice Transcribe on Nov 3: a Korean-native voice reading English garbles it (and the read-back check rejects it),
+ * so each preset maps to a native speaker of the line's language where one exists.
+ */
+export const PRESETS: Record<string, { ko: string; en: string }> = {
+  female_a: { ko: "sohee", en: "vivian" },
+  female_b: { ko: "sohee", en: "serena" },
+  male: { ko: "sohee", en: "ryan" },
+  male_b: { ko: "sohee", en: "aiden" },
+};
 
-export function presetFor(key: string | null | undefined): string {
-  return (PRESETS as Record<string, string>)[key ?? ""] ?? key ?? PRESETS.female_a;
+export function presetFor(key: string | null | undefined, language: "ko" | "en" = "en"): string {
+  const p = PRESETS[key ?? ""] ?? PRESETS.female_a;
+  return p[language];
 }
 
 export async function synthesize(

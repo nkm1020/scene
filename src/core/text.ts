@@ -1,4 +1,5 @@
 // Text normalization and similarity used by the round-trip and enrollment checks.
+import { spokenVariants } from "./numbers";
 
 const EMOJI = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu;
 
@@ -8,6 +9,7 @@ export function normalize(s: string): string {
     .normalize("NFKC")
     .toLowerCase()
     .replace(EMOJI, "")
+    .replace(/\bokay\b|\bo\.k\./g, "ok") // spelling variants that sound identical
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
@@ -26,12 +28,21 @@ export function levenshtein(a: string, b: string): number {
   return prev[B.length];
 }
 
-/** Similarity in [0,1] on normalized text: (|a|+|b|-dist)/(|a|+|b|). 1 = identical. */
+/**
+ * Read-back score in [0,1] = 1 − character error rate against the expected text (normalized).
+ * Strict on purpose: "ok so" heard as "약 그" must fail. Digits may be spoken as words, so the
+ * expected text is also tried with numbers spelled out (7시 → 일곱 시, 7pm → seven pm); the best score wins.
+ */
 export function similarity(expected: string, heard: string): number {
-  const a = normalize(expected), b = normalize(heard);
-  const total = [...a].length + [...b].length;
-  if (total === 0) return 1;
-  return (total - levenshtein(a, b)) / total;
+  const b = normalize(heard);
+  let best = 0;
+  for (const candidate of [expected, ...spokenVariants(expected)]) {
+    const a = normalize(candidate);
+    const n = [...a].length;
+    if (n === 0) return [...b].length === 0 ? 1 : 0;
+    best = Math.max(best, Math.max(0, 1 - levenshtein(a, b) / n));
+  }
+  return best;
 }
 
 /** True when the message has nothing to speak (emoji or punctuation only). */

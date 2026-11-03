@@ -3,9 +3,9 @@ import type { ChatMessage } from "./director";
 import type { PersonaSpec } from "./persona";
 
 export const SEED_MEMBERS: (PersonaSpec & { id: string; preset: string })[] = [
-  { id: "sam", name: "Sam", hair: "short messy black hair", outfit: "an oversized green hoodie", vibe: "cheerful", preset: "male" },
+  { id: "sam", name: "Sam", hair: "short messy black hair", outfit: "an oversized green hoodie", vibe: "cheerful", preset: "male_b" },
   { id: "mina", name: "Mina", hair: "long wavy brown hair with bangs", outfit: "a yellow cardigan", vibe: "playful", preset: "female_a" },
-  { id: "jay", name: "Jay", hair: "short bleached blond hair", outfit: "a denim jacket", vibe: "smug", preset: "female_b" },
+  { id: "jay", name: "Jay", hair: "short bleached blond hair", outfit: "a denim jacket", vibe: "smug", preset: "male" },
 ];
 
 const raw: [string, string][] = [

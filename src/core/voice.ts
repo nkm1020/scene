@@ -4,7 +4,7 @@
 //               Up to 3 synthesis attempts; then the line plays as captions only, flagged voice_unverified.
 
 import { transcribe } from "./meta";
-import { synthesize, type Voice } from "./tts";
+import { synthesize, presetFor, type Voice } from "./tts";
 import { similarity, isSilent, guessLanguage } from "./text";
 import { toVtWav, silenceRatio, durationMs, decodeWav, rmsEnvelope } from "./wav";
 import type { Ledger } from "./ledger";
@@ -63,14 +63,17 @@ export interface VoiceRender {
 }
 
 /** Synthesize `text` in `voice`, read it back, and only return audio that matches. */
+export type VoiceSpec = Voice | { presetKey: string };
+
 export async function renderVoice(
   text: string,
-  voice: Voice | null,
+  spec: VoiceSpec | null,
   opts: { ledger?: Ledger; forceFirstFail?: boolean } = {},
 ): Promise<VoiceRender> {
   if (isSilent(text)) return { status: "silent", wav: null, durationMs: 0, envelope: [], attempts: [], similarity: 1, heard: "", flags: ["emoji_only"] };
-  if (!voice) return { status: "captions_only", wav: null, durationMs: 0, envelope: [], attempts: [], similarity: 0, heard: "", flags: ["voice_disabled"] };
+  if (!spec) return { status: "captions_only", wav: null, durationMs: 0, envelope: [], attempts: [], similarity: 0, heard: "", flags: ["voice_disabled"] };
   const language = guessLanguage(text);
+  const voice: Voice = "presetKey" in spec ? { preset: presetFor(spec.presetKey, language) } : spec;
   const attempts: RenderAttempt[] = [];
   for (let attempt = 1; attempt <= MAX_SYNTH_ATTEMPTS; attempt++) {
     const seed = 1000 + attempt * 7919;
@@ -98,7 +101,4 @@ export async function renderVoice(
   return { status: "captions_only", wav: null, durationMs: 0, envelope: [], attempts, similarity: best?.similarity ?? 0, heard: best?.heard ?? "", flags: ["voice_unverified"] };
 }
 
-export function voiceForMember(m: { voice_ref_b64?: string | null; voice_ref_text?: string | null; preset?: string | null }, presetName: (k?: string | null) => string): Voice {
-  if (m.voice_ref_b64 && m.voice_ref_text) return { ref_audio_b64: m.voice_ref_b64, ref_text: m.voice_ref_text };
-  return { preset: presetName(m.preset) };
-}
+

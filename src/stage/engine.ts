@@ -38,7 +38,7 @@ export interface TimelineEntry {
 }
 
 const ENV_FPS = 30;
-const TABLE_Y = 71; // % of stage height (table center)
+const TABLE_Y = 68; // % of stage height (table center)
 const TABLE_H = 19; // % of stage height
 
 export function itemDuration(item: PerformItem): number {
@@ -112,9 +112,10 @@ function injectCss(doc: Document) {
 const wait = (ms: number, signal?: { cancelled: boolean; skip: boolean }) =>
   new Promise<void>((resolve) => {
     const t0 = performance.now();
+    // Timer-based (not rAF) so a hidden tab still advances its queue.
     const tick = () => {
       if (signal?.cancelled || signal?.skip || performance.now() - t0 >= ms) return resolve();
-      requestAnimationFrame(tick);
+      setTimeout(tick, Math.min(50, Math.max(1, ms - (performance.now() - t0))));
     };
     tick();
   });
@@ -169,7 +170,7 @@ export class Stage {
       // Seats sit on the far rim of an elliptical table; the viewer's seat (near rim) is the camera.
       const angle = n === 1 ? Math.PI / 2 : Math.PI - (i * Math.PI) / (n - 1) * 0.84 - Math.PI * 0.08;
       const depth = Math.sin(angle); // 1 = far middle
-      const x = 50 - 32 * Math.cos(angle);
+      const x = 50 - (n <= 3 ? 32 : 37) * Math.cos(angle);
       const y = TABLE_Y - TABLE_H * 0.5 * depth + 4; // feet just behind the rim (hidden by the table top)
       const s = 1 - 0.16 * depth;
       const el = document.createElement("div");
@@ -208,7 +209,7 @@ export class Stage {
     const w = this.root.clientWidth || 360;
     const h = this.root.clientHeight || 640;
     const n = Math.max(1, this.seats.size);
-    const base = Math.min(w * (n <= 2 ? 0.5 : n === 3 ? 0.42 : 0.34), h * 0.4);
+    const base = Math.min(w * (n <= 2 ? 0.5 : n === 3 ? 0.42 : n === 4 ? 0.29 : n === 5 ? 0.25 : 0.21), h * 0.4);
     this.root.style.setProperty("--table-y", `${TABLE_Y}%`);
     this.root.style.setProperty("--table-h", `${TABLE_H}%`);
     for (const seat of this.seats.values()) {
@@ -315,6 +316,8 @@ export class Stage {
   async perform(item: PerformItem, opts: { speed?: number; signal?: { cancelled: boolean; skip: boolean } } = {}): Promise<void> {
     const speed = opts.speed ?? 1;
     const signal = opts.signal ?? { cancelled: false, skip: false };
+    (window as any).__sceneLog ??= [];
+    (window as any).__sceneLog.push({ t: Date.now(), id: item.messageId, member: item.memberId, status: item.status, text: item.text.slice(0, 40) });
     const seat = this.seats.get(item.memberId) ?? null;
     const wasAbsent = seat ? !seat.member.present : false;
     for (const s of this.seats.values()) s.el.classList.toggle("dimmed", s !== seat);
@@ -356,9 +359,9 @@ export class Stage {
         }
         const ended = audio ? audio.ended || (audio.paused && audio.currentTime > 0) : performance.now() - t0 >= dur;
         if (ended) return resolve();
-        requestAnimationFrame(tick);
+        setTimeout(tick, 33);
       };
-      requestAnimationFrame(tick);
+      setTimeout(tick, 0);
     });
     if (audio && !audio.ended) audio.pause();
     if (seat) {

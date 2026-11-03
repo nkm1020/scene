@@ -1,0 +1,141 @@
+{
+  "url": "http://127.0.0.1:8765",
+  "label": "local",
+  "ts": "2026-11-03T00:33:13Z",
+  "presets_without_token_status": 401,
+  "first_call": {
+    "file": "local_preset_ko_sohee.wav",
+    "text": "야 금요일 7시 다 모여",
+    "language": "ko",
+    "voice": "sohee",
+    "wall_ms": 64041,
+    "gen_ms": 44410,
+    "dur_ms": 2320,
+    "rtf": 19.143,
+    "queue_ms": 19542,
+    "prompt_ms": 0,
+    "voice_cache": null,
+    "sr": 24000
+  },
+  "lines": [
+    {
+      "file": "local_preset_ko_sohee.wav",
+      "text": "야 금요일 7시 다 모여",
+      "language": "ko",
+      "voice": "sohee",
+      "wall_ms": 64041,
+      "gen_ms": 44410,
+      "dur_ms": 2320,
+      "rtf": 19.143,
+      "queue_ms": 19542,
+      "prompt_ms": 0,
+      "voice_cache": null,
+      "sr": 24000
+    },
+    {
+      "file": null,
+      "text": "안녕, 나는 이번 주 금요일 파티를 준비하고 있어.",
+      "language": "ko",
+      "voice": "sohee",
+      "wall_ms": 62671,
+      "gen_ms": 62551,
+      "dur_ms": 5040,
+      "rtf": 12.411,
+      "queue_ms": 0,
+      "prompt_ms": 0,
+      "voice_cache": null,
+      "sr": 24000
+    },
+    {
+      "file": null,
+      "text": "다들 일곱 시까지 거실에 모여서 조용히 기다려 줘.",
+      "language": "ko",
+      "voice": "sohee",
+      "wall_ms": 55162,
+      "gen_ms": 55054,
+      "dur_ms": 4720,
+      "rtf": 11.664,
+      "queue_ms": 0,
+      "prompt_ms": 0,
+      "voice_cache": null,
+      "sr": 24000
+    },
+    {
+      "file": null,
+      "text": "케이크는 내가 가져갈 테니까 너희는 풍선만 챙겨 와.",
+      "language": "ko",
+      "voice": "sohee",
+      "wall_ms": 63605,
+      "gen_ms": 63508,
+      "dur_ms": 3120,
+      "rtf": 20.355,
+      "queue_ms": 0,
+      "prompt_ms": 0,
+      "voice_cache": null,
+      "sr": 24000
+    },
+    {
+      "file": "local_clone_ko_secret.wav",
+      "text": "제이한테는 비밀",
+      "language": "ko",
+      "voice": "clone",
+      "wall_ms": 20872,
+      "gen_ms": 20808,
+      "dur_ms": 1200,
+      "rtf": 17.34,
+      "queue_ms": 0,
+      "prompt_ms": 4568,
+      "voice_cache": "miss",
+      "sr": 24000
+    },
+    {
+      "file": "local_clone_en_cake.wav",
+      "text": "you can't bring your own cake",
+      "language": "en",
+      "voice": "clone",
+      "wall_ms": 16750,
+      "gen_ms": 16707,
+      "dur_ms": 1760,
+      "rtf": 9.493,
+      "queue_ms": 0,
+      "prompt_ms": 1,
+      "voice_cache": "hit",
+      "sr": 24000
+    }
+  ],
+  "ref": {
+    "file": "local_ref_ko_sohee_12s.wav",
+    "seconds": 13.58,
+    "text": "안녕, 나는 이번 주 금요일 파티를 준비하고 있어. 다들 일곱 시까지 거실에 모여서 조용히 기다려 줘. 케이크는 내가 가져갈 테니까 너희는 풍선만 챙겨 와."
+  },
+  "clone_runs": [
+    {
+      "file": "local_clone_ko_secret.wav",
+      "text": "제이한테는 비밀",
+      "language": "ko",
+      "voice": "clone",
+      "wall_ms": 20872,
+      "gen_ms": 20808,
+      "dur_ms": 1200,
+      "rtf": 17.34,
+      "queue_ms": 0,
+      "prompt_ms": 4568,
+      "voice_cache": "miss",
+      "sr": 24000
+    },
+    {
+      "file": "local_clone_en_cake.wav",
+      "text": "you can't bring your own cake",
+      "language": "en",
+      "voice": "clone",
+      "wall_ms": 16750,
+      "gen_ms": 16707,
+      "dur_ms": 1760,
+      "rtf": 9.493,
+      "queue_ms": 0,
+      "prompt_ms": 1,
+      "voice_cache": "hit",
+      "sr": 24000
+    }
+  ]
+}

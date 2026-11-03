@@ -1,12 +1,12 @@
 import "server-only";
 import { Ledger } from "@/core/ledger";
 import { ruleDirection } from "@/core/director";
-import { renderVoice } from "@/core/voice";
-import { presetFor, ttsEndpoint, type Voice } from "@/core/tts";
+import { renderVoice, type VoiceSpec } from "@/core/voice";
+import { ttsEndpoint } from "@/core/tts";
 import { db, publicUrl, saveLedger } from "./db";
 
 /** Voice for a member: enrolled reference (private bucket) or preset. Null when TTS is off. */
-export async function memberVoice(memberId: string): Promise<Voice | null> {
+export async function memberVoice(memberId: string): Promise<VoiceSpec | null> {
   if (!ttsEndpoint()) return null;
   const { data: m } = await db().from("members").select("preset, enrolled_voice").eq("id", memberId).single();
   if (m?.enrolled_voice) {
@@ -16,7 +16,7 @@ export async function memberVoice(memberId: string): Promise<Voice | null> {
       if (blob) return { ref_audio_b64: Buffer.from(await blob.arrayBuffer()).toString("base64"), ref_text: s.voice_text };
     }
   }
-  return { preset: presetFor(m?.preset) };
+  return { presetKey: m?.preset ?? "female_a" };
 }
 
 /**

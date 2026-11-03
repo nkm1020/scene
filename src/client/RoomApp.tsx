@@ -60,6 +60,8 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   const stageHost = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const liveQueue = useRef<PerformItem[]>([]);
+  const earlyRenders = useRef(new Map<string, Render>()); // renders that arrived before their message
+  const [liveSeen, setLiveSeen] = useState<Set<string>>(new Set()); // performed live while you were here
   const busy = useRef(false);
   const stateRef = useRef<RoomState | null>(null);
   stateRef.current = state;
@@ -96,6 +98,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
 
   // Live performance queue (messages that arrive while you're here)
   const pump = useCallback(async () => {
+    console.debug("[rt] pump", { busy: busy.current, mode: modeRef.current, stage: !!stage.current, q: liveQueue.current.length });
     if (busy.current || modeRef.current !== "idle" || !stage.current) return;
     const item = liveQueue.current.shift();
     if (!item) return;
@@ -103,11 +106,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     try {
       const ctl = stage.current.play([{ ...item, pauseMs: 150 }], {});
       await ctl.done;
-      const msg = stateRef.current?.messages.find((m) => m.id === item.messageId);
-      if (msg) {
-        setLastSeen(roomId, Math.max(lastSeen(roomId), msg.seq));
-        setSeen(lastSeen(roomId));
-      }
+      setLiveSeen((prev) => new Set(prev).add(item.messageId));
     } finally {
       busy.current = false;
       void pump();
@@ -122,18 +121,34 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       .channel(`room:${roomId}`, { config: { presence: { key: creds.memberId } } })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, (p) => {
         const m = p.new as Message;
+        console.debug("[rt] message", m.id, m.member_id === creds.memberId ? "mine" : "theirs");
+        if (stateRef.current && !stateRef.current.messages.some((x) => x.id === m.id)) stateRef.current = { ...stateRef.current, messages: [...stateRef.current.messages, m] };
         setState((s) => (s && !s.messages.some((x) => x.id === m.id) ? { ...s, messages: [...s.messages, m] } : s));
-        if (m.member_id !== creds.memberId) stage.current?.setWaiting(m.member_id, true);
+        if (m.member_id === creds.memberId) return;
+        const early = earlyRenders.current.get(m.id);
+        if (early) {
+          earlyRenders.current.delete(m.id);
+          if (modeRef.current === "idle") {
+            liveQueue.current.push(toItem(m, early));
+            void pump();
+          }
+        } else stage.current?.setWaiting(m.member_id, true);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "renders", filter: `room_id=eq.${roomId}` }, (p) => {
         const r = p.new as Render;
+        console.debug("[rt] render", p.eventType, r?.message_id, r?.status, (p.old as any)?.status);
         if (!r?.message_id) return;
         setState((s) => (s ? { ...s, renders: [...s.renders.filter((x) => x.message_id !== r.message_id), r] } : s));
         if (r.status === "pending") return;
-        const msg = stateRef.current?.messages.find((m) => m.id === r.message_id);
-        if (!msg || msg.member_id === creds.memberId) return;
-        if (modeRef.current !== "idle") return; // replay will cover it
         if (p.eventType === "UPDATE" && (p.old as any)?.status && (p.old as any).status !== "pending") return; // direction-only update
+        const msg = stateRef.current?.messages.find((m) => m.id === r.message_id);
+        if (!msg) {
+          console.debug("[rt] early render stored", r.message_id);
+          earlyRenders.current.set(r.message_id, r);
+          return;
+        }
+        if (msg.member_id === creds.memberId) return;
+        if (modeRef.current !== "idle") return; // replay will cover it
         stage.current?.setWaiting(msg.member_id, false);
         liveQueue.current.push(toItem(msg, r));
         void pump();
@@ -145,7 +160,8 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         const ids = new Set(Object.keys(ch.presenceState()));
         setPresent(ids);
       })
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        console.debug("[rt] channel", status, err?.message ?? "");
         if (status === "SUBSCRIBED") void ch.track({ at: Date.now() });
       });
     return () => {
@@ -158,7 +174,10 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     for (const m of state?.members ?? []) stage.current?.setPresence(m.id, present.has(m.id));
   }, [present, state?.members]);
 
-  const missed = useMemo(() => (state?.messages ?? []).filter((m) => m.seq > seen && m.member_id !== creds?.memberId), [state, seen, creds]);
+  const missed = useMemo(
+    () => (state?.messages ?? []).filter((m) => m.seq > seen && m.member_id !== creds?.memberId && !liveSeen.has(m.id)),
+    [state, seen, creds, liveSeen],
+  );
 
   const playMissed = async () => {
     if (!stage.current || !state) return;
