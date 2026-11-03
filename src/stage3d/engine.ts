@@ -71,7 +71,7 @@ export function buildTimeline(items: PerformItem[], speed = 1): TimelineEntry[] 
   return items.map((item, index) => {
     t += item.pauseMs / speed;
     const start = t;
-    t += itemDuration(item) / speed + 600 / speed; // turn and settle
+    t += itemDuration(item) / speed + 820 / speed; // turn and settle
     return { index, start, end: t, item };
   });
 }
@@ -566,10 +566,11 @@ export class Stage {
   private camera: THREE.PerspectiveCamera;
   private camPos = new THREE.Vector3(0, EYE_Y, 0.7);
   private look = new THREE.Vector3(0, TABLE_Y + 0.1, -0.3);
-  private lookTarget = new THREE.Vector3(0, TABLE_Y + 0.1, -0.3);
   private baseFov = 56;
   private fov = 56;
-  private fovTarget = 56;
+  private shotCamera: Camera = "room";
+  /** The camera move in progress: an S curve from where the camera was to the new shot (times in ms). */
+  private move = { t0: 0, dur: 0, p0: new THREE.Vector3(), v0: new THREE.Vector3(), p1: new THREE.Vector3(0, TABLE_Y + 0.1, -0.3), f0: 56, fv0: 0, f1: 56 };
   private ring = seatRing(3);
   private table = new THREE.Group();
   private figures = new Map<string, Figure>();
@@ -629,7 +630,6 @@ export class Stage {
     this.ro.observe(root);
     this.layout();
     this.resize();
-    this.look.copy(this.lookTarget);
     r.setAnimationLoop(() => this.frame());
   }
 
@@ -746,11 +746,9 @@ export class Stage {
     this.camera.aspect = w / h;
     // portrait phones get a taller view so the speaker fits; landscape sees most of the table at once
     this.baseFov = w / h >= 1 ? 56 : 58;
-    this.fovTarget = this.baseFov * (this.fovTarget / Math.max(1, this.fov) < 0.9 ? 0.7 : 1);
-    this.fov = this.fovTarget;
+    this.shot(this.focus, this.shotCamera, true); // a new frame size cuts straight to the shot
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
-    this.shot(this.focus, "room");
   }
 
   private portrait() {
@@ -1029,9 +1027,7 @@ export class Stage {
     const s = ++this.step;
     const dt = 1 / FPS;
     const k = 0.5; // turns settle in a few pictures
-    const kc = 0.42;
-    this.look.lerp(this.lookTarget, kc);
-    this.fov += (this.fovTarget - this.fov) * kc;
+    this.sampleMove(now);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();
@@ -1153,25 +1149,72 @@ export class Stage {
   }
 
   /** Where the viewer looks: across the table at rest, or turned toward the speaker. */
-  private shot(f: Figure | null, camera: Camera) {
+  private shot(f: Figure | null, camera: Camera, snap = false) {
     this.focus = f;
+    this.shotCamera = camera;
     const portrait = this.portrait();
     const rest = new THREE.Vector3(0, portrait ? 0.5 : 0.44, -this.ring.rSeat * 0.6);
     if (!f && this.figures.size === 1) {
       // one person across the table (the figure preview): look at them, closer
       const only = [...this.figures.values()][0];
-      this.lookTarget.set(only.seat.x, 0.48, only.seat.z);
-      this.fovTarget = this.baseFov * 0.62;
+      this.aim(new THREE.Vector3(only.seat.x, 0.48, only.seat.z), this.baseFov * 0.62, snap);
+    } else if (!f) {
+      this.aim(rest, this.baseFov, snap);
+    } else {
+      const face = new THREE.Vector3(f.seat.x, portrait ? 0.54 : 0.5, f.seat.z);
+      this.aim(rest.clone().lerp(face, portrait ? 1 : 0.75), this.baseFov * (camera === "close" ? 0.7 : 1), snap);
+    }
+  }
+
+  /**
+   * Move the camera to a new shot the way a motion-control rig does: an S curve that eases out of rest and
+   * into the new framing. A move that interrupts another keeps its speed, so the camera never stops dead mid-pan.
+   */
+  private aim(target: THREE.Vector3, fov: number, snap = false) {
+    const m = this.move;
+    if (!snap && m.p1.distanceTo(target) < 1e-4 && Math.abs(m.f1 - fov) < 0.01) return; // already on its way there
+    const now = performance.now();
+    const v = new THREE.Vector3();
+    const fv = this.sampleMove(now, v);
+    m.p0.copy(this.look);
+    m.f0 = this.fov;
+    m.p1.copy(target);
+    m.f1 = fov;
+    m.t0 = now;
+    if (snap) {
+      m.dur = 0;
+      this.look.copy(target);
+      this.fov = fov;
       return;
     }
-    if (!f) {
-      this.lookTarget.copy(rest);
-      this.fovTarget = this.baseFov;
-      return;
+    // longer pans and bigger zooms take longer: about 0.8 s to a neighbour, 1.3 s across the whole table
+    const angle = this.look.clone().sub(this.camPos).angleTo(target.clone().sub(this.camPos));
+    m.dur = (Math.min(1.3, 0.6 + 0.7 * angle + 0.6 * Math.abs(Math.log(fov / this.fov))) * 1000) / (this.current?.speed ?? 1);
+    // keep only the part of the old speed that already heads toward the new shot
+    const d = target.clone().sub(this.look);
+    m.v0.copy(d).multiplyScalar(d.lengthSq() > 1e-8 ? Math.max(0, v.dot(d) / d.lengthSq()) : 0);
+    m.fv0 = Math.sign(fov - this.fov) === Math.sign(fv) ? fv : 0;
+  }
+
+  /** Put the camera where the move has it at time t. Writes the look velocity (per ms) to `vel` and returns the zoom velocity. */
+  private sampleMove(t: number, vel?: THREE.Vector3): number {
+    const m = this.move;
+    const u = m.dur > 0 ? Math.min(1, Math.max(0, (t - m.t0) / m.dur)) : 1;
+    const u2 = u * u, u3 = u2 * u, u4 = u3 * u, u5 = u4 * u;
+    // quintic Hermite: leave p0 at speed v0, arrive at p1 at rest with no jolt (with v0 = 0 it is smootherstep)
+    const h0 = 1 - 10 * u3 + 15 * u4 - 6 * u5;
+    const h1 = (u - 6 * u3 + 8 * u4 - 3 * u5) * m.dur;
+    const h5 = 1 - h0;
+    this.look.set(0, 0, 0).addScaledVector(m.p0, h0).addScaledVector(m.v0, h1).addScaledVector(m.p1, h5);
+    this.fov = m.f0 * h0 + m.fv0 * h1 + m.f1 * h5;
+    if (!vel || m.dur <= 0 || u >= 1) {
+      vel?.set(0, 0, 0);
+      return 0;
     }
-    const face = new THREE.Vector3(f.seat.x, portrait ? 0.54 : 0.5, f.seat.z);
-    this.lookTarget.copy(rest).lerp(face, portrait ? 1 : 0.75);
-    this.fovTarget = this.baseFov * (camera === "close" ? 0.7 : 1);
+    const d0 = (-30 * u2 + 60 * u3 - 30 * u4) / m.dur;
+    const d1 = 1 - 18 * u2 + 32 * u3 - 15 * u4;
+    vel.set(0, 0, 0).addScaledVector(m.p0, d0).addScaledVector(m.v0, d1).addScaledVector(m.p1, -d0);
+    return m.f0 * d0 + m.fv0 * d1 - m.f1 * d0;
   }
 
   // ───────── perform ─────────
@@ -1218,7 +1261,9 @@ export class Stage {
     this.showCaption(item);
 
     const dur = itemDuration(item) / speed;
-    await new Promise((r) => setTimeout(r, 380 / speed)); // turn to the speaker
+    // turn to the speaker: the line starts as the camera slows into the new shot
+    const settling = this.move.t0 + this.move.dur * 0.8 - performance.now();
+    await new Promise((r) => setTimeout(r, Math.max(380 / speed, settling)));
     let audio: HTMLAudioElement | null = null;
     if (item.status === "verified" && item.audioUrl) {
       audio = new Audio(item.audioUrl);
