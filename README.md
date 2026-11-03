@@ -2,7 +2,7 @@
 
 # Scene: your group chat, performed
 
-Your friends stand on the table as little clay figures. When a message arrives, its sender walks to the front and says it in their own voice; everyone else at the table reacts. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
+You sit at a round table with your friends as clay figures, seen from your own seat. When a message arrives, you turn to its sender and they say it to you in their own voice; everyone else at the table turns and reacts. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
 
 Theme: **Build for Your World** · Track: Indie Developer · Meta AI Developer Hackathon 2026
 
@@ -14,7 +14,7 @@ Turn the external voice off and Scene still works: the figures, the performance 
 
 | What you see | Made by |
 |---|---|
-| **Your figure.** Three words become a clay figurine, then six more versions of the same figurine: happy, laughing, surprised, annoyed, sad, dozing. | **Muse Image** sculpts the figurine and edits it into each expression (same character). **SAM 3.1** masks the figurine in every image. **SAM 3D Objects** lifts each masked image into a mesh that stands on the table. |
+| **Your figure.** Three words become a clay figurine, then six more versions of the same figurine: happy, laughing, surprised, annoyed, sad, asleep. | **Muse Image** sculpts the figurine and edits it into each expression (same character). **SAM 3.1** masks the figurine in every image. **SAM 3D Objects** lifts each masked image into a mesh that sits at the table. |
 | **The performance.** Who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. |
 | **Talking.** Hold to talk; your words become the message. | **Muse Voice Transcribe**. |
 | **The guarantee.** A line plays in a voice only if it says exactly the message. | **Muse Voice Transcribe** listens to every synthesized line and compares it with the message. |
@@ -44,7 +44,7 @@ Prefer not to run anything? [`examples/demo-room/replay.html`](examples/demo-roo
 
 ```
 Make a figure (once per person, about a minute)
-  3 words ─▶ Muse Image: clay figurine ─▶ Muse Image edits: happy, laughing, surprised, annoyed, sad, dozing
+  3 words ─▶ Muse Image: clay figurine ─▶ Muse Image edits: happy, laughing, surprised, annoyed, sad, asleep
            ─▶ SAM 3.1 masks the figurine in each image ─▶ SAM 3D Objects: one mesh per expression (GLB)
 
 Send
@@ -85,7 +85,7 @@ Measured on Nov 3, 2026 from the receipts. Standard tier prices.
 
 <!-- TTS-NUMBERS -->
 
-**What Spark adds that a rule table cannot.** In the seed room Jay is not connected, so he dozes. When Sam shouts "DO NOT tell Jay", Spark wakes him up, surprised. When Mina sends "...", Sam looks down. When Jay says "this is the only chat we have", the other two look away, caught. When Jay announces he is bringing the cake, Sam is annoyed and Mina laughs.
+**What Spark adds that a rule table cannot.** In the seed room Jay is not connected, so he sleeps slumped over the table. When Sam shouts "DO NOT tell Jay", Spark wakes him up, surprised. When Mina sends "...", Sam looks down. When Jay says "this is the only chat we have", the other two look away, caught. When Jay announces he is bringing the cake, Sam is annoyed and Mina laughs.
 
 **What the read-back check caught.** Seeding the demo room, Qwen3-TTS produced lines Scene refused to play: it invented a name before "do not tell Jay" (*"Tangira Blackford said, do not tell Jay."*), babbled in Chinese before "I'll bring the cake", and looped a 2-second line into 20 seconds. Voice Transcribe heard each one, the score fell to 0.00, and Scene synthesized again until the clip matched. An earlier, more lenient score let a garbled English line pass at 0.88 (*"약 그 So who's bringing the cake으로"*); that case is now a regression test, and preset voices are chosen per language.
 
@@ -102,7 +102,7 @@ npx tsx scripts/update-demo-figures.ts  # attaches the seed cast and lets Spark 
 npm run dev                             # http://localhost:3000 → "Open the demo room" (a private copy per visitor)
 ```
 
-Rooms are links. No accounts: joining creates a member with a private key kept in the browser. Presence is posture: friends who are in the room stand awake; friends who are away doze, and wake only for the lines that concern them.
+Rooms are links. No accounts: joining creates a member with a private key kept in the browser. Presence is posture: friends who are in the room sit up; friends who are away sleep slumped over the table, and wake only for the lines that concern them.
 
 ## Repository map
 

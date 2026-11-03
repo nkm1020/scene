@@ -7,6 +7,7 @@ import { browserDb } from "./supabase";
 import { api, loadCreds, saveCreds, lastSeen, setLastSeen, type Creds } from "./api";
 import { Recorder } from "./audio";
 import { ENROLL_SENTENCES } from "@/core/seed";
+import { castHere } from "@/core/cast";
 
 type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; figure?: FigureAssets | null; figure_status?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
 type Message = { id: string; room_id: string; member_id: string; seq: number; text: string; created_at: string };
@@ -61,7 +62,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [creds, setCreds] = useState<Creds | null>(null);
   const [joined, setJoined] = useState(false);
-  const [present, setPresent] = useState<Set<string>>(new Set());
+  const [connected, setPresent] = useState<Set<string>>(new Set());
   const [seen, setSeen] = useState(0);
   const [mode, setMode] = useState<"idle" | "directing" | "replaying">("idle");
   const [directorNote, setDirectorNote] = useState<string>("");
@@ -80,6 +81,8 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   modeRef.current = mode;
 
   const me = useMemo(() => state?.members.find((m) => m.id === creds?.memberId) ?? null, [state, creds]);
+  // who is at the table: connected members, plus the demo cast that the story puts there
+  const present = useMemo(() => new Set([...connected, ...(state?.members ?? []).filter(castHere).map((m) => m.id)]), [connected, state?.members]);
   const presentRef = useRef(present);
   presentRef.current = present;
   const roster = () => (stateRef.current?.members ?? []).map((m) => ({ member_id: m.id, name: m.name, present: presentRef.current.has(m.id) }));
@@ -531,7 +534,7 @@ function Join({ roomId, roomName, onDone }: { roomId: string; roomName: string; 
         {step === "name" && (
           <>
             <h1>Take a seat.</h1>
-            <p className="muted">Your friends will see you as a little clay figure on the table, saying your messages in your voice.</p>
+            <p className="muted">Your friends will see you as a clay figure at their table, saying your messages in your voice.</p>
             <label>Your name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="e.g. Sam" autoFocus />
             <label>Voice until you register yours</label>
@@ -618,7 +621,7 @@ function PersonaStep({ creds, onNext, compact }: { creds: Creds; onNext: () => v
   return (
     <>
       {!compact && <h1>Your figurine</h1>}
-      <p className="muted">Pick three things. Muse Image sculpts a clay you, SAM 3.1 cuts it out, and SAM 3D turns it into a figure that stands on the table. Six expressions follow in the background.</p>
+      <p className="muted">Pick three things. Muse Image sculpts a clay you, SAM 3.1 cuts it out, and SAM 3D turns it into a figure that sits at the table. Six expressions follow in the background.</p>
       {result ? (
         <div className="persona-result">
           <FigurePreview figure={{ neutral: result.neutral }} name="You" />

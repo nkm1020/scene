@@ -42,5 +42,5 @@ export default function HeroStage() {
       stage?.destroy();
     };
   }, []);
-  return <div className="hero-stage" ref={host} aria-label="Three friends as clay figurines on a table, performing a group chat" />;
+  return <div className="hero-stage" ref={host} aria-label="Seen from your seat: three friends as clay figurines around a table, performing a group chat" />;
 }

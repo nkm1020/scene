@@ -90,7 +90,8 @@ export async function unionAlpha(masks: SamMask[], width: number, height: number
 }
 
 /** Apply a 0..255 alpha map to an image and crop to its bounding box with padding. */
-export async function applyAlpha(image: Buffer, alpha: Uint8Array, width: number, height: number, pad = 0.06) {
+/** Cut out with alpha, cropped to the subject. fixedScale keeps one scale across images (figure poses) instead of a fixed height. */
+export async function applyAlpha(image: Buffer, alpha: Uint8Array, width: number, height: number, pad = 0.06, fixedScale?: number) {
   const { data } = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const rgba = Buffer.alloc(width * height * 4);
   let minX = width, minY = height, maxX = -1, maxY = -1, on = 0;
@@ -110,13 +111,13 @@ export async function applyAlpha(image: Buffer, alpha: Uint8Array, width: number
   }
   const coverage = on / (width * height);
   if (on === 0) return { png: null, coverage, width: 0, height: 0 };
-  const px = Math.round((maxX - minX) * pad), py = Math.round((maxY - minY) * pad);
+  const px = fixedScale ? 8 : Math.round((maxX - minX) * pad), py = fixedScale ? 8 : Math.round((maxY - minY) * pad);
   const left = Math.max(0, minX - px), top = Math.max(0, minY - py);
   const w = Math.min(width, maxX + px + 1) - left, h = Math.min(height, maxY + py + 1) - top;
   // Slight blur on alpha only would need a separate pass; keep hard edges (sticker look).
   const png = await sharp(rgba, { raw: { width, height, channels: 4 } })
     .extract({ left, top, width: w, height: h })
-    .resize({ height: Math.min(h, 768), withoutEnlargement: true })
+    .resize(fixedScale ? { width: Math.max(1, Math.round(w * fixedScale)) } : { height: Math.min(h, 768), withoutEnlargement: true })
     .webp({ quality: 88, alphaQuality: 100, effort: 5 }) // ~85% smaller than PNG, keeps alpha
     .toBuffer();
   const meta = await sharp(png).metadata();

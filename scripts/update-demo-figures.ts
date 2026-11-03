@@ -14,13 +14,14 @@ const pub = (p: string) => db.storage.from("figures").getPublicUrl(p).data.publi
 const ledger = new Ledger();
 
 const { data: members } = await db.from("members").select("id, name").eq("room_id", TPL).throwOnError();
+const stamp = Date.now().toString(36); // new paths each run: public URLs are cached
 for (const m of members ?? []) {
   const id = m.name.toLowerCase();
   const figure: Record<string, { img: string; glb: string | null }> = {};
   for (const pose of FIGURE_POSES) {
     const dir = `public/seed/figures/${id}`;
     if (!existsSync(`${dir}/${pose}.webp`)) continue;
-    const base = `${TPL}/${id}/${pose}`;
+    const base = `${TPL}/${id}/${stamp}/${pose}`;
     await db.storage.from("figures").upload(`${base}.webp`, readFileSync(`${dir}/${pose}.webp`), { contentType: "image/webp", upsert: true });
     let glb: string | null = null;
     if (existsSync(`${dir}/${pose}.glb`)) {

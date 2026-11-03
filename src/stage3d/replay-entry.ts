@@ -58,7 +58,7 @@ function main() {
     const last = rb.at(-1);
     const badge =
       it.status === "verified" ? `voice read back ${last ? last.score.toFixed(2) : ""}${rb.length > 1 ? ` on try ${rb.length}` : ""}` : it.status === "silent" ? "emoji, no voice" : "captions only";
-    const reacts = (it.reactions ?? []).map((r) => `${data.members.find((m) => m.id === r.memberId)?.name ?? r.memberId} ${r.pose === "away" ? "dozes" : r.pose}`).join(", ");
+    const reacts = (it.reactions ?? []).map((r) => `${data.members.find((m) => m.id === r.memberId)?.name ?? r.memberId} ${r.pose === "away" ? "asleep" : r.pose}`).join(", ");
     li.append(el("b", "", who), el("span", "t", ` ${it.text}`), el("span", "meta", `${it.emotion}, ${it.gesture}, ${it.camera}${reacts ? ` · ${reacts}` : ""} · ${badge}`));
     for (const r of rb.slice(0, -1)) li.append(el("span", "rej", `rejected ${r.score.toFixed(2)}: heard “${r.heard}”`));
     lines.append(li);

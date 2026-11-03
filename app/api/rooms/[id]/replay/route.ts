@@ -3,6 +3,7 @@ import { directSegment, MAX_SEGMENT } from "@/core/director";
 import { db, saveLedger, jsonError } from "@/server/db";
 import { assertDailySpend, assertRoomOp } from "@/server/quota";
 import { renderMessage } from "@/server/render";
+import { castHere } from "@/core/cast";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
@@ -16,8 +17,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json().catch(() => ({}));
     const afterSeq = Number(body.afterSeq ?? 0);
     const present = new Set<string>(Array.isArray(body.present) ? body.present.map(String) : []);
-    const { data: roomMembers } = await db().from("members").select("id, name").eq("room_id", id);
-    const roster = (roomMembers ?? []).map((m) => ({ member_id: m.id, name: m.name, present: present.has(m.id) }));
+    const { data: roomMembers } = await db().from("members").select("id, name, is_seed").eq("room_id", id);
+    const roster = (roomMembers ?? []).map((m) => ({ member_id: m.id, name: m.name, present: present.has(m.id) || castHere(m) }));
     const { data: msgs, error } = await db()
       .from("messages")
       .select("id, member_id, seq, text, members(name)")

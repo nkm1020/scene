@@ -27,7 +27,7 @@ export default function Home() {
         <div className="wordmark">Scene</div>
         <h1>Your group chat, performed.</h1>
         <p className="lede">
-          Your friends stand on the table as little clay figures. Each one says what they typed, in their own voice, and nothing else. Missed the chat? Press play and
+          You sit at a table with your friends as clay figures. Each one says what they typed, in their own voice, and nothing else. Missed the chat? Press play and
           the table acts it out.
         </p>
         <div className="home-actions">

@@ -1,6 +1,6 @@
-// Figure pipeline: three words → a clay figurine and its expressions, all Meta models.
+// Figure pipeline: three words → a seated clay figurine and its expressions, all Meta models.
 //   Muse Image draws the figurine (neutral) → Muse Image edits it into each expression (same character)
-//   → SAM 3.1 masks the figurine in every image → SAM 3D Objects lifts each one into a 3D mesh (GLB).
+//   → SAM 3.1 masks the figurine and its stool in every image → SAM 3D Objects lifts each one into a 3D mesh (GLB).
 // The performance is these meshes: the director swaps them per line and per listener.
 
 import sharp from "sharp";
@@ -13,12 +13,12 @@ export const FIGURE_POSES = ["neutral", "happy", "laughing", "surprised", "angry
 export type FigurePose = (typeof FIGURE_POSES)[number];
 
 const POSE_EDITS: Record<Exclude<FigurePose, "neutral">, string> = {
-  happy: "smiling warmly with bright eyes, hands loosely clasped",
-  laughing: "laughing hard, eyes squeezed shut, mouth wide open, one hand on the belly",
+  happy: "smiling warmly with bright eyes, hands on the knees",
+  laughing: "laughing hard, leaning back, eyes squeezed shut, mouth wide open, one hand on the belly",
   surprised: "shocked, eyes wide, mouth open, both hands raised beside the face",
   angry: "exasperated, frowning hard with arms crossed, mouth open mid-complaint",
   sad: "sad, shoulders slumped, looking down, small frown",
-  away: "dozing off standing up, eyes closed, head drooping forward, arms hanging",
+  away: "asleep on the stool: bent far forward at the waist, arms folded across the knees, head down resting on the folded arms so only the top of the head shows, like napping face-down on a desk",
 };
 
 /** Milder wording, tried once when the image model's content filter rejects the first edit. */
@@ -28,19 +28,19 @@ const POSE_EDITS_SOFT: Record<Exclude<FigurePose, "neutral">, string> = {
   surprised: "surprised face with raised eyebrows and round mouth",
   angry: "grumpy pout with arms crossed",
   sad: "sad face looking down",
-  away: "eyes closed, head tilted down, sleepy",
+  away: "napping bent forward at the waist, head down on folded arms",
 };
 
 export function figurePrompt(spec: PersonaSpec): string {
   return [
     `Claymation figurine of a person with ${spec.hair}, wearing ${spec.outfit}, ${spec.vibe} mood.`,
-    "Handmade plasticine miniature with faint fingerprints, slightly oversized head, full body standing on a small round clay base, front view, arms at the sides.",
+    "Handmade plasticine miniature with faint fingerprints, slightly oversized head, sitting upright on a small plain wooden stool, hands resting on the knees, both feet on the ground, full body with the whole stool visible, front view facing the camera.",
     "Soft even studio lighting with no hard shadows, plain light gray background, centered with empty space around it, nothing else in the frame, no text.",
   ].join(" ");
 }
 
 export function poseEditPrompt(pose: Exclude<FigurePose, "neutral">, soft = false): string {
-  return `Same character, same clay style, same full-body framing, same plain light gray background and even lighting. Only change the pose and expression: ${(soft ? POSE_EDITS_SOFT : POSE_EDITS)[pose]}.`;
+  return `Same character, same clay style, still sitting on the same wooden stool, same full-body framing, same plain light gray background and even lighting. Only change the pose and expression: ${(soft ? POSE_EDITS_SOFT : POSE_EDITS)[pose]}.`;
 }
 
 /** Nearest available pose when one could not be made (content filter, failure). */
@@ -70,8 +70,11 @@ export async function maskFigure(image: Buffer, opts: { ledger?: Ledger; op?: st
   for (const phrase of ["person", "figurine", "clay figure"]) {
     const seg = await segment(image, "image/png", phrase, { op: opts.op ?? "figure.mask", ledger: opts.ledger });
     if (!seg.masks.length) continue;
-    const alpha = await unionAlpha(seg.masks, W!, H!);
-    const cut = await applyAlpha(image, alpha, W!, H!);
+    // The figure sits on a stool: SAM 3.1 takes one phrase per call, so the stool is a second call, unioned.
+    const stool = await segment(image, "image/png", "stool", { op: opts.op ?? "figure.mask", ledger: opts.ledger }).catch(() => ({ masks: [] as typeof seg.masks }));
+    const alpha = await unionAlpha([...seg.masks, ...stool.masks.slice(0, 1)], W!, H!);
+    // one scale for every pose (half the source frame): the stage sizes poses against the neutral one
+    const cut = await applyAlpha(image, alpha, W!, H!, 0, 0.5);
     if (!cut.png || cut.coverage < 0.03 || cut.coverage > 0.85) continue;
     const mask = await sharp(Buffer.from(alpha.map((v) => (v > 127 ? 255 : 0))), { raw: { width: W!, height: H!, channels: 1 } }).png().toBuffer();
     return { mask, cutout: cut.png, coverage: cut.coverage, phrase };
