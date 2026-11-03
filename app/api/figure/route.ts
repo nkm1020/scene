@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { Ledger } from "@/core/ledger";
-import { createFigureBase, createFigurePoses } from "@/core/figure";
+import { createFigureBase, createFigurePoses, createFigureFrames, type FigurePose } from "@/core/figure";
 import { authMember, db, saveLedger, jsonError, HttpError } from "@/server/db";
 import { assertDailySpend, assertRoomOp } from "@/server/quota";
 import { storePose } from "@/server/figures";
@@ -10,7 +10,8 @@ export const maxDuration = 300;
 const clean = (v: unknown) => String(v ?? "").replace(/[^\p{L}\p{N} ,'-]/gu, "").trim().slice(0, 40);
 
 // Your figure: Muse Image draws a clay figurine → SAM 3.1 masks it → SAM 3D lifts it to a mesh.
-// The neutral figure comes back in this response; the six expressions are made after it.
+// The neutral figure comes back in this response; the six expressions are made after it, then the stop-motion
+// replacement frames (mouth shapes, a blink, the other half of each expression).
 export async function POST(req: Request) {
   const ledger = new Ledger();
   let roomId: string | null = null;
@@ -31,8 +32,11 @@ export async function POST(req: Request) {
     after(async () => {
       const poseLedger = new Ledger();
       try {
-        await createFigurePoses(base.image, { ledger: poseLedger, onPose: async (a) => { await storePose(member.id, member.room_id, stamp, a); } });
+        const poses = await createFigurePoses(base.image, { ledger: poseLedger, onPose: async (a) => { await storePose(member.id, member.room_id, stamp, a); } });
         await db().from("members").update({ figure_status: "ready" }).eq("id", member.id);
+        const images: Partial<Record<FigurePose, Buffer>> = { neutral: base.image };
+        for (const p of poses) if (p.image.length) images[p.pose] = p.image;
+        await createFigureFrames(images, { ledger: poseLedger, onFrame: async (name, a) => { await storePose(member.id, member.room_id, stamp, a, name); } });
       } catch (e) {
         console.error("poses failed", e);
         await db().from("members").update({ figure_status: "ready" }).eq("id", member.id);

@@ -90,8 +90,34 @@ export async function unionAlpha(masks: SamMask[], width: number, height: number
 }
 
 /** Apply a 0..255 alpha map to an image and crop to its bounding box with padding. */
-/** Cut out with alpha, cropped to the subject. fixedScale keeps one scale across images (figure poses) instead of a fixed height. */
+/** Cut out with alpha, cropped to the subject. fixedScale keeps the whole frame at that scale instead (figure poses and frames). */
+/** Shrink a mask by r pixels (separable min filter): drops the fringe of background a loose mask keeps. */
+export function erodeAlpha(alpha: Uint8Array, width: number, height: number, r: number): Uint8Array {
+  const tmp = new Uint8Array(alpha.length), out = new Uint8Array(alpha.length);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      let m = 255;
+      for (let d = -r; d <= r && m; d++) {
+        const xx = x + d;
+        m = Math.min(m, xx < 0 || xx >= width ? 0 : alpha[y * width + xx]);
+      }
+      tmp[y * width + x] = m;
+    }
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      let m = 255;
+      for (let d = -r; d <= r && m; d++) {
+        const yy = y + d;
+        m = Math.min(m, yy < 0 || yy >= height ? 0 : tmp[yy * width + x]);
+      }
+      out[y * width + x] = m;
+    }
+  return out;
+}
+
 export async function applyAlpha(image: Buffer, alpha: Uint8Array, width: number, height: number, pad = 0.06, fixedScale?: number) {
+  // figure cut-outs sit in a dark set: trim the mask edge so no light-gray background rims the clay
+  if (fixedScale) alpha = erodeAlpha(alpha, width, height, Math.max(2, Math.round(width / 400)));
   const { data } = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const rgba = Buffer.alloc(width * height * 4);
   let minX = width, minY = height, maxX = -1, maxY = -1, on = 0;
@@ -111,9 +137,10 @@ export async function applyAlpha(image: Buffer, alpha: Uint8Array, width: number
   }
   const coverage = on / (width * height);
   if (on === 0) return { png: null, coverage, width: 0, height: 0 };
-  const px = fixedScale ? 8 : Math.round((maxX - minX) * pad), py = fixedScale ? 8 : Math.round((maxY - minY) * pad);
-  const left = Math.max(0, minX - px), top = Math.max(0, minY - py);
-  const w = Math.min(width, maxX + px + 1) - left, h = Math.min(height, maxY + py + 1) - top;
+  const px = Math.round((maxX - minX) * pad), py = Math.round((maxY - minY) * pad);
+  // fixedScale keeps the whole source frame, so every pose and animation frame of a figure lines up exactly
+  const left = fixedScale ? 0 : Math.max(0, minX - px), top = fixedScale ? 0 : Math.max(0, minY - py);
+  const w = fixedScale ? width : Math.min(width, maxX + px + 1) - left, h = fixedScale ? height : Math.min(height, maxY + py + 1) - top;
   // Slight blur on alpha only would need a separate pass; keep hard edges (sticker look).
   const png = await sharp(rgba, { raw: { width, height, channels: 4 } })
     .extract({ left, top, width: w, height: h })

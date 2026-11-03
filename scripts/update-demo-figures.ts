@@ -4,7 +4,7 @@
 import "dotenv/config";
 import { existsSync, readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { FIGURE_POSES } from "../src/core/figure";
+import { FIGURE_POSES, FIGURE_FRAMES } from "../src/core/figure";
 import { directSegment } from "../src/core/director";
 import { Ledger } from "../src/core/ledger";
 
@@ -18,7 +18,7 @@ const stamp = Date.now().toString(36); // new paths each run: public URLs are ca
 for (const m of members ?? []) {
   const id = m.name.toLowerCase();
   const figure: Record<string, { img: string; glb: string | null }> = {};
-  for (const pose of FIGURE_POSES) {
+  for (const pose of [...FIGURE_POSES, ...FIGURE_FRAMES]) {
     const dir = `public/seed/figures/${id}`;
     if (!existsSync(`${dir}/${pose}.webp`)) continue;
     const base = `${TPL}/${id}/${stamp}/${pose}`;

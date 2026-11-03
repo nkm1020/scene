@@ -39,6 +39,49 @@ export function figurePrompt(spec: PersonaSpec): string {
   ].join(" ");
 }
 
+/**
+ * Stop-motion replacement frames: small edits of a pose image (mouth shapes, a blink, the other half of a laugh),
+ * swapped in at 12 fps by the stage, the way stop-motion films swap faces.
+ */
+export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b"] as const;
+export type FigureFrame = (typeof FIGURE_FRAMES)[number];
+const HOLD = "Same character, same clay style, same stool, same pose, same framing, same plain light gray background and lighting. Change nothing else:";
+const MOVE = "Same character, same clay style, same stool, same framing, same plain light gray background and lighting.";
+export const FRAME_EDITS: Record<FigureFrame, { from: FigurePose; prompt: string }> = {
+  talk_a: { from: "neutral", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
+  talk_b: { from: "neutral", prompt: `${HOLD} the mouth is a small round "oh", as if talking.` },
+  blink: { from: "neutral", prompt: `${HOLD} the eyes are closed mid-blink.` },
+  wake: { from: "neutral", prompt: `${MOVE} Just woken up and groggy: eyelids drooping, slightly hunched, rubbing one eye with a fist.` },
+  happy_b: { from: "happy", prompt: `${HOLD} the mouth is open mid-word, still smiling, as if talking happily.` },
+  laughing_b: { from: "laughing", prompt: `${MOVE} Still laughing hard, but now leaning forward with one hand slapping the knee.` },
+  surprised_b: { from: "surprised", prompt: `${HOLD} the mouth is a smaller open oval, mid-word.` },
+  angry_b: { from: "angry", prompt: `${HOLD} the mouth is pressed shut in a grumpy pout.` },
+  sad_b: { from: "sad", prompt: `${HOLD} the mouth is slightly open mid-word, as if speaking quietly.` },
+};
+
+/** Make the replacement frames from the pose images (each an edit of its pose, masked by SAM 3.1, optionally lifted). */
+export async function createFigureFrames(
+  poseImages: Partial<Record<FigurePose, Buffer>>,
+  opts: { ledger?: Ledger; skip3d?: boolean; frames?: FigureFrame[]; onFrame?: (name: FigureFrame, a: FigurePoseAsset) => void | Promise<void> } = {},
+) {
+  const frames = (opts.frames ?? [...FIGURE_FRAMES]).filter((f) => poseImages[FRAME_EDITS[f].from]?.length);
+  return Promise.all(
+    frames.map(async (name) => {
+      const { from, prompt } = FRAME_EDITS[name];
+      try {
+        const edited = await editImage([poseImages[from]!], prompt, { op: "figure.frame", ledger: opts.ledger });
+        const a = await liftPose(from, edited.bytes, opts);
+        await opts.onFrame?.(name, a);
+        return [name, a] as const;
+      } catch (e) {
+        const a: FigurePoseAsset = { pose: from, image: Buffer.alloc(0), cutout: Buffer.alloc(0), mask: Buffer.alloc(0), glb: null, coverage: 0, error: (e as Error).message.slice(0, 200) };
+        await opts.onFrame?.(name, a);
+        return [name, a] as const;
+      }
+    }),
+  );
+}
+
 export function poseEditPrompt(pose: Exclude<FigurePose, "neutral">, soft = false): string {
   return `Same character, same clay style, still sitting on the same wooden stool, same full-body framing, same plain light gray background and even lighting. Only change the pose and expression: ${(soft ? POSE_EDITS_SOFT : POSE_EDITS)[pose]}.`;
 }

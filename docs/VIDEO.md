@@ -1,6 +1,6 @@
 # 3-minute video — shot list (updated Nov 3 for the build as it exists)
 
-Direction since Nov 3 noon: friends are **3D clay figurines** (Muse Image figurine and six expression edits, SAM 3.1 masks, SAM 3D meshes) seated around a wooden table, seen first person from your own seat, and **Spark directs the whole table** (listener reactions; a dozing friend wakes when the line is about them). Failure scenes use **real logs captured on Nov 3** (below). Record phone screens at 9:16; edit to 16:9 with two phones side by side.
+Direction since Nov 3 noon: friends are **3D clay figurines** (Muse Image figurine and six expression edits, SAM 3.1 masks, SAM 3D meshes) seated around a wooden table, seen first person from your own seat, shot like a stop-motion film (12 fps, replacement mouths and blinks made by Muse Image, clay boil, a miniature dining room with shallow focus), and **Spark directs the whole table** (listener reactions; a dozing friend wakes when the line is about them). Failure scenes use **real logs captured on Nov 3** (below). Record phone screens at 9:16; edit to 16:9 with two phones side by side.
 
 | Time | Screen | Voiceover |
 |---|---|---|

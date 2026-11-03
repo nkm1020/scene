@@ -14,7 +14,7 @@ Turn the external voice off and Scene still works: the figures, the performance 
 
 | What you see | Made by |
 |---|---|
-| **Your figure.** Three words become a clay figurine, then six more versions of the same figurine: happy, laughing, surprised, annoyed, sad, asleep. | **Muse Image** sculpts the figurine and edits it into each expression (same character). **SAM 3.1** masks the figurine in every image. **SAM 3D Objects** lifts each masked image into a mesh that sits at the table. |
+| **Your figure.** Three words become a clay figurine, then six more versions of the same figurine: happy, laughing, surprised, annoyed, sad, asleep. Then stop-motion replacement frames: mouth shapes, a blink, a groggy wake-up, the other half of each expression. The table runs at 12 pictures a second and swaps them like a stop-motion film swaps faces. | **Muse Image** sculpts the figurine and edits it into each expression (same character). **SAM 3.1** masks the figurine in every image. **SAM 3D Objects** lifts each masked image into a mesh that sits at the table. |
 | **The performance.** Who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. |
 | **Talking.** Hold to talk; your words become the message. | **Muse Voice Transcribe**. |
 | **The guarantee.** A line plays in a voice only if it says exactly the message. | **Muse Voice Transcribe** listens to every synthesized line and compares it with the message. |

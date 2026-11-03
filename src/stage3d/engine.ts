@@ -1,10 +1,15 @@
-// Scene stage in 3D, first person: you sit at a round wooden table with your friends as seated clay figurines
-// (SAM 3D meshes). You turn to whoever is talking; listeners turn and react as the director says;
-// friends who are not connected sleep slumped over on their stools.
+// Scene stage in 3D, first person, shot like a stop-motion film: you sit at a round table in a miniature dining room
+// with your friends as seated clay figurines (SAM 3D meshes). Everything moves twelve pictures a second; mouths,
+// blinks and laughs are replacement frames (Muse Image edits) swapped in like stop-motion faces; the clay boils.
+// You turn to whoever is talking; listeners turn and react as the director says; absent friends sleep slumped over.
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 export type Emotion = "neutral" | "happy" | "surprised" | "angry" | "sad" | "laughing";
 export type Gesture = "none" | "lean_in" | "step_back" | "shake" | "nod";
@@ -96,6 +101,11 @@ const TABLE_Y = 0.34; // table top
 const EYE_Y = 0.7; // the viewer's eyes, a little above everyone else's so the table reads
 const CENTER = new THREE.Vector3(0, TABLE_Y, 0);
 const ENV_FPS = 30;
+const FPS = 12; // stop motion: a new picture twelve times a second (animated "on twos")
+const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b"];
+const ROOM_R = 2.3; // the miniature dining room around the table
+const WALL_H = 1.8;
+const WAINSCOT_H = 0.5;
 
 /**
  * Seats around a round table for the viewer plus `others` people. The viewer keeps a little elbow room
@@ -139,7 +149,7 @@ function woodTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = c.height = 1024;
   const g = c.getContext("2d")!;
-  g.fillStyle = "#a66d3c";
+  g.fillStyle = "#7e4f2b";
   g.fillRect(0, 0, 1024, 1024);
   for (let p = 0; p < 6; p++) {
     const x0 = (p * 1024) / 6;
@@ -163,6 +173,167 @@ function woodTexture(): THREE.CanvasTexture {
   return t;
 }
 
+function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void, repeat?: [number, number]): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  draw(c.getContext("2d")!);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  if (repeat) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeat[0], repeat[1]);
+  }
+  return t;
+}
+
+/** Specks of grit and paper fibre, so surfaces read as made things. */
+function speckle(g: CanvasRenderingContext2D, w: number, h: number, n: number, light = false) {
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = light ? `rgba(255,240,210,${Math.random() * 0.08})` : `rgba(30,15,5,${Math.random() * 0.1})`;
+    g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+}
+
+/** Mustard stripe wallpaper with a small diamond, printed slightly off-register. */
+function wallpaperTexture(repeat: [number, number]) {
+  return canvasTex(256, 256, (g) => {
+    g.fillStyle = "#bd8c3c";
+    g.fillRect(0, 0, 256, 256);
+    for (let x = 0; x < 256; x += 64) {
+      g.fillStyle = "#ad7c31";
+      g.fillRect(x + 32, 0, 32, 256);
+      g.fillStyle = "rgba(236,200,130,.35)";
+      g.fillRect(x + 31, 0, 1.5, 256);
+      for (let y = 16; y < 256; y += 64) {
+        const cx = x + 48 + (Math.random() - 0.5), cy = y + (Math.random() - 0.5);
+        g.fillStyle = "#8a5f22";
+        g.beginPath();
+        g.moveTo(cx, cy - 7);
+        g.lineTo(cx + 5, cy);
+        g.lineTo(cx, cy + 7);
+        g.lineTo(cx - 5, cy);
+        g.fill();
+        g.fillStyle = "#d9ae62";
+        g.fillRect(cx - 1, cy + 30, 2, 2);
+      }
+    }
+    speckle(g, 256, 256, 900);
+    speckle(g, 256, 256, 300, true);
+  }, repeat);
+}
+
+/** Dark walnut boards for the lower wall. */
+function wainscotTexture(repeat: [number, number]) {
+  return canvasTex(256, 128, (g) => {
+    g.fillStyle = "#4e301d";
+    g.fillRect(0, 0, 256, 128);
+    for (let x = 0; x < 256; x += 32) {
+      g.fillStyle = `rgba(${70 + Math.random() * 20},${42 + Math.random() * 10},24,.5)`;
+      g.fillRect(x + 2, 0, 28, 128);
+      g.fillStyle = "rgba(20,10,4,.7)";
+      g.fillRect(x, 0, 2, 128);
+      g.fillStyle = "rgba(200,150,100,.12)";
+      g.fillRect(x + 2, 0, 1, 128);
+    }
+    speckle(g, 256, 128, 500);
+  }, repeat);
+}
+
+/** Floorboards. */
+function floorTexture(repeat: [number, number]) {
+  return canvasTex(512, 512, (g) => {
+    g.fillStyle = "#5e3b23";
+    g.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 512; y += 48) {
+      let x = -Math.random() * 200;
+      while (x < 512) {
+        const len = 160 + Math.random() * 220;
+        g.fillStyle = `rgb(${88 + Math.random() * 22},${56 + Math.random() * 14},${32 + Math.random() * 8})`;
+        g.fillRect(x + 1, y + 1, len - 2, 46);
+        g.strokeStyle = "rgba(40,22,10,.25)";
+        for (let k = 0; k < 4; k++) {
+          g.beginPath();
+          const yy = y + 6 + Math.random() * 36;
+          g.moveTo(x, yy);
+          g.bezierCurveTo(x + len / 3, yy + 3, x + (2 * len) / 3, yy - 3, x + len, yy);
+          g.stroke();
+        }
+        x += len;
+      }
+      g.fillStyle = "rgba(20,10,4,.8)";
+      g.fillRect(0, y, 512, 2);
+    }
+    speckle(g, 512, 512, 1500);
+  }, repeat);
+}
+
+/** A round rug: rust field, ochre and umber bands, a ring of diamonds. */
+function rugTexture() {
+  return canvasTex(512, 512, (g) => {
+    const c = 256;
+    const ring = (r: number, col: string) => {
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(c, c, r, 0, Math.PI * 2);
+      g.fill();
+    };
+    ring(256, "#3a2418");
+    ring(244, "#c49a45");
+    ring(226, "#7e3220");
+    ring(206, "#3a2418");
+    ring(198, "#8f3d24");
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      const x = c + Math.cos(a) * 216, y = c + Math.sin(a) * 216;
+      g.fillStyle = "#d8b25e";
+      g.beginPath();
+      g.moveTo(x, y - 6);
+      g.lineTo(x + 5, y);
+      g.lineTo(x, y + 6);
+      g.lineTo(x - 5, y);
+      g.fill();
+    }
+    ring(120, "#a5512e");
+    ring(110, "#8f3d24");
+    // woven texture
+    for (let y = 0; y < 512; y += 3) {
+      g.fillStyle = `rgba(0,0,0,${0.03 + Math.random() * 0.04})`;
+      g.fillRect(0, y, 512, 1);
+    }
+    speckle(g, 512, 512, 2500);
+    speckle(g, 512, 512, 800, true);
+  });
+}
+
+/** Night sky through the window: deep blue, a few stars, a pale moon. */
+function nightTexture() {
+  return canvasTex(256, 320, (g) => {
+    const grd = g.createLinearGradient(0, 0, 0, 320);
+    grd.addColorStop(0, "#101a33");
+    grd.addColorStop(1, "#2c4569");
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 256, 320);
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = `rgba(255,245,220,${0.3 + Math.random() * 0.5})`;
+      g.fillRect(Math.random() * 256, Math.random() * 200, 1.5, 1.5);
+    }
+    g.fillStyle = "#f3e7c4";
+    g.beginPath();
+    g.arc(180, 70, 18, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#1a2a48";
+    g.fillRect(0, 250, 256, 70); // a hedge line
+    g.fillStyle = "#16233c";
+    for (let x = 0; x < 256; x += 22) {
+      g.beginPath();
+      g.arc(x + 11, 252, 16, Math.PI, 0);
+      g.fill();
+    }
+  });
+}
+
 const POSE_FALLBACK: Record<Pose, Pose[]> = {
   neutral: [],
   happy: ["laughing", "neutral"],
@@ -178,17 +349,23 @@ const POSE_FALLBACK: Record<Pose, Pose[]> = {
 interface Figure {
   member: StageMember;
   group: THREE.Group; // on the floor at the seat, turns (yaw)
-  body: THREE.Group; // squash and bounce, pivot at the floor
+  body: THREE.Group; // bounce and clay boil, pivot at the floor
   tilt: THREE.Group; // lean and nod, pivot at the stool top
-  poses: Map<Pose, THREE.Object3D>;
+  poses: Map<string, THREE.Object3D>; // poses and replacement frames, one visible at a time
   cards: Set<THREE.Object3D>; // flat cut-outs: always turned to the viewer
-  current: Pose;
+  current: Pose; // the pose the director asked for
+  shown: string; // the picture on screen right now (a pose or one of its replacement frames)
   seat: THREE.Vector3;
   yaw: number;
   targetYaw: number;
   speaking: boolean;
+  mouth: number; // loudness of the line being said, 0..1
+  flap: boolean;
+  mouthFrame: string;
+  blinkAt: number; // picture number of the next blink
+  wake: number; // pictures left on the groggy "wake" frame
+  boil: { x: number; z: number; r: number; s: number };
   hopT: number; // seconds since the line started (−1 = none)
-  squash: number;
   breathe: boolean;
   gesture: Gesture;
   gestureT: number;
@@ -196,6 +373,7 @@ interface Figure {
   targetDim: number;
   label: HTMLDivElement;
   materials: { m: THREE.MeshStandardMaterial; base: THREE.Color }[];
+  k: number | null; // world units per image pixel, from the neutral cut-out
 }
 
 const loader = new GLTFLoader();
@@ -331,6 +509,49 @@ function defaultFigure(hue: number): THREE.Object3D {
   return g;
 }
 
+// ───────────────────────── miniature lens ─────────────────────────
+
+/**
+ * Shallow depth of field, so the set reads as a miniature shot up close. The stock pass writes depth for whole
+ * cut-out cards (transparent corners included); this one uses each mesh's own depth material, which honours alpha.
+ */
+class CutoutBokehPass extends BokehPass {
+  private plain = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, blending: THREE.NoBlending });
+  render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
+    const self = this as any;
+    const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = [];
+    this.scene.traverseVisible((o: any) => {
+      if (!o.isMesh) return;
+      swapped.push([o, o.material]);
+      o.material = o.customDepthMaterial ?? this.plain;
+    });
+    const oldClear = new THREE.Color();
+    renderer.getClearColor(oldClear);
+    const oldAlpha = renderer.getClearAlpha();
+    const oldAuto = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setClearColor(0xffffff);
+    renderer.setClearAlpha(1);
+    renderer.setRenderTarget(self._renderTargetDepth);
+    renderer.clear();
+    const bg = this.scene.background;
+    this.scene.background = null;
+    renderer.render(this.scene, this.camera);
+    this.scene.background = bg;
+    for (const [m, mat] of swapped) m.material = mat;
+    const u = this.uniforms as any;
+    u.tColor.value = readBuffer.texture;
+    u.nearClip.value = (this.camera as THREE.PerspectiveCamera).near;
+    u.farClip.value = (this.camera as THREE.PerspectiveCamera).far;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    if (!this.renderToScreen) renderer.clear();
+    self._fsQuad.render(renderer);
+    renderer.setClearColor(oldClear);
+    renderer.setClearAlpha(oldAlpha);
+    renderer.autoClear = oldAuto;
+  }
+}
+
 // ───────────────────────── stage ─────────────────────────
 
 /**
@@ -359,7 +580,12 @@ export class Stage {
   private audioCtx: AudioContext | null = null;
   private current: { cancelled: boolean; skip: boolean; speed: number } | null = null;
   private focus: Figure | null = null;
-  private clock = new THREE.Clock();
+  private lastStep = 0;
+  private step = 0;
+  private lamp: THREE.SpotLight | null = null;
+  private composer: EffectComposer | null = null;
+  private bokeh: CutoutBokehPass | null = null;
+  private lampBase = 1;
   private ro: ResizeObserver;
   private disposed = false;
 
@@ -380,37 +606,25 @@ export class Stage {
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 0.92;
+    r.toneMappingExposure = 1.0;
     r.outputColorSpace = THREE.SRGBColorSpace;
     root.prepend(r.domElement);
     this.renderer = r;
 
-    this.scene.background = new THREE.Color(ROOM);
-    this.scene.fog = new THREE.Fog(ROOM, 1.6, 4.5);
-    const pmrem = new THREE.PMREMGenerator(r);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-
-    this.scene.add(new THREE.HemisphereLight("#fff4e6", "#5a4a3a", 0.4));
-    // one warm light over the table, like a pendant lamp
-    const key = new THREE.DirectionalLight("#ffeedd", 2.6);
-    key.position.set(-0.5, 2.4, 0.6);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    Object.assign(key.shadow.camera, { left: -1.4, right: 1.4, top: 1.4, bottom: -1.4, near: 0.5, far: 5 });
-    key.shadow.bias = -0.0004;
-    key.shadow.radius = 5;
-    this.scene.add(key);
-    const fill = new THREE.DirectionalLight("#dfe8ff", 0.45);
-    fill.position.set(1.2, 1.0, 1.8);
-    this.scene.add(fill);
-
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(8, 64), new THREE.MeshStandardMaterial({ color: ROOM, roughness: 1 }));
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    this.scene.add(floor);
+    this.buildRoom();
     this.scene.add(this.table);
 
     this.camera = new THREE.PerspectiveCamera(56, 1, 0.03, 30);
+    try {
+      const composer = new EffectComposer(r);
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bokeh = new CutoutBokehPass(this.scene, this.camera, { focus: 1.2, aperture: 0.004, maxblur: 0.007 });
+      composer.addPass(this.bokeh);
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+    } catch {
+      this.composer = null; // plain rendering
+    }
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(root);
     this.layout();
@@ -421,10 +635,90 @@ export class Stage {
 
   // ───────── layout ─────────
 
+  /** A miniature dining room: wallpaper over walnut boards, floorboards, a window onto the night, a pendant lamp. */
+  private buildRoom() {
+    const sc = this.scene;
+    sc.background = new THREE.Color("#21160e");
+    sc.fog = new THREE.Fog("#21160e", 3.4, 8);
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    sc.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    sc.environmentIntensity = 0.18;
+
+    const circ = 2 * Math.PI * ROOM_R;
+    const paper = new THREE.Mesh(
+      new THREE.CylinderGeometry(ROOM_R, ROOM_R, WALL_H - WAINSCOT_H, 96, 1, true),
+      new THREE.MeshStandardMaterial({ map: wallpaperTexture([circ / 0.32, (WALL_H - WAINSCOT_H) / 0.32]), roughness: 0.95, side: THREE.BackSide }),
+    );
+    paper.position.y = WAINSCOT_H + (WALL_H - WAINSCOT_H) / 2;
+    paper.receiveShadow = true;
+    const boards = new THREE.Mesh(
+      new THREE.CylinderGeometry(ROOM_R, ROOM_R, WAINSCOT_H, 96, 1, true),
+      new THREE.MeshStandardMaterial({ map: wainscotTexture([circ / 0.5, 1]), roughness: 0.7, side: THREE.BackSide }),
+    );
+    boards.position.y = WAINSCOT_H / 2;
+    const rail = new THREE.Mesh(new THREE.TorusGeometry(ROOM_R - 0.012, 0.014, 6, 128), new THREE.MeshStandardMaterial({ color: "#3a2416", roughness: 0.6 }));
+    rail.rotation.x = Math.PI / 2;
+    rail.position.y = WAINSCOT_H;
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(ROOM_R, 96), new THREE.MeshStandardMaterial({ map: floorTexture([3, 3]), roughness: 0.8 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    const ceiling = new THREE.Mesh(new THREE.CircleGeometry(ROOM_R, 64), new THREE.MeshStandardMaterial({ color: "#3b2a1c", roughness: 1 }));
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = WALL_H;
+    sc.add(paper, boards, rail, floor, ceiling);
+
+    // a window onto the night, behind the far left of the table
+    const win = new THREE.Group();
+    const a = Math.PI + 0.42;
+    win.position.set(Math.sin(a) * (ROOM_R - 0.03), 0.98, Math.cos(a) * (ROOM_R - 0.03));
+    win.lookAt(0, 0.98, 0);
+    const cream = new THREE.MeshStandardMaterial({ color: "#e6d6b4", roughness: 0.6 });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.84, 0.04), cream);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.74), new THREE.MeshBasicMaterial({ map: nightTexture(), fog: false }));
+    glass.position.z = 0.021;
+    const mullionV = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.74, 0.03), cream);
+    const mullionH = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.03, 0.03), cream);
+    mullionV.position.z = mullionH.position.z = 0.03;
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.035, 0.1), cream);
+    sill.position.set(0, -0.43, 0.04);
+    win.add(frame, glass, mullionV, mullionH, sill);
+    sc.add(win);
+    const moon = new THREE.DirectionalLight("#8fa8e8", 0.55);
+    moon.position.copy(win.position).setY(1.3);
+    sc.add(moon);
+
+    // pendant lamp over the table: the key light, warm, pooling on the tabletop
+    const lampY = 1.05;
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, WALL_H - lampY, 6), new THREE.MeshStandardMaterial({ color: "#1d140e" }));
+    cord.position.y = lampY + (WALL_H - lampY) / 2;
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.13, 40, 1, true), new THREE.MeshStandardMaterial({ color: "#2e4a3b", roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide }));
+    shade.position.y = lampY;
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.165, 0.125, 40, 1, true), new THREE.MeshBasicMaterial({ color: "#f6dfa8", side: THREE.BackSide }));
+    inner.position.y = lampY - 0.002;
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), new THREE.MeshBasicMaterial({ color: "#fff3d0" }));
+    bulb.position.y = lampY - 0.05;
+    sc.add(cord, shade, inner, bulb);
+    const lamp = new THREE.SpotLight("#ffcb85", 4.4, 0, 0.98, 0.85, 1.6);
+    lamp.position.set(0, lampY - 0.06, 0);
+    lamp.target.position.set(0, 0, 0);
+    lamp.castShadow = true;
+    lamp.shadow.mapSize.set(1024, 1024);
+    lamp.shadow.bias = -0.0006;
+    lamp.shadow.radius = 4;
+    sc.add(lamp, lamp.target);
+    this.lamp = lamp;
+    this.lampBase = lamp.intensity;
+    // soft fill from behind the viewer, and the room's bounce light
+    const fill = new THREE.DirectionalLight("#ffdcb4", 0.6);
+    fill.position.set(0.5, 1.3, 2.6);
+    sc.add(fill);
+    sc.add(new THREE.HemisphereLight("#ffd9a6", "#3b2618", 0.28));
+  }
+
   private buildTable() {
     this.table.clear();
     const { rTable } = this.ring;
-    const wood = new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.5, metalness: 0 });
+    const wood = new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.62, metalness: 0 });
     const edge = new THREE.MeshStandardMaterial({ color: "#8a5d35", roughness: 0.6 });
     const top = new THREE.Mesh(new THREE.CylinderGeometry(rTable, rTable, 0.035, 96), [edge, wood, edge]);
     top.position.y = TABLE_Y - 0.0175;
@@ -436,13 +730,19 @@ export class Stage {
     const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.02, 48), edge);
     foot.position.y = 0.01;
     foot.receiveShadow = true;
-    this.table.add(top, leg, foot);
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(this.ring.rSeat + 0.42, 96), new THREE.MeshStandardMaterial({ map: rugTexture(), roughness: 1 }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.y = 0.004;
+    rug.receiveShadow = true;
+    this.table.add(top, leg, foot, rug);
   }
 
   private resize() {
     const w = this.root.clientWidth || 360;
     const h = this.root.clientHeight || 640;
     this.renderer.setSize(w, h, false);
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer?.setSize(w, h);
     this.camera.aspect = w / h;
     // portrait phones get a taller view so the speaker fits; landscape sees most of the table at once
     this.baseFov = w / h >= 1 ? 56 : 58;
@@ -465,10 +765,20 @@ export class Stage {
   setMembers(members: StageMember[]) {
     const prev = new Map(this.members.map((m) => [m.id, m]));
     this.members = members;
-    const same =
-      members.length === prev.size &&
-      members.every((m) => prev.has(m.id) && JSON.stringify(prev.get(m.id)!.figure ?? null) === JSON.stringify(m.figure ?? null) && prev.get(m.id)!.personaUrl === m.personaUrl && prev.get(m.id)!.name === m.name);
-    if (!same) this.layout();
+    const sameCast = members.length === prev.size && members.every((m) => prev.has(m.id) && prev.get(m.id)!.name === m.name);
+    if (!sameCast) this.layout();
+    else
+      for (const m of members) {
+        // figures arrive a pose or a frame at a time: swap in only what changed
+        const f = this.figures.get(m.id);
+        if (!f) continue;
+        const old = f.member.figure ?? {}, nu = m.figure ?? {};
+        const neutralChanged = JSON.stringify(old.neutral ?? null) !== JSON.stringify(nu.neutral ?? null) || f.member.personaUrl !== m.personaUrl;
+        const changed = [...new Set([...Object.keys(old), ...Object.keys(nu)])].filter((key) => JSON.stringify(old[key] ?? null) !== JSON.stringify(nu[key] ?? null));
+        f.member = { ...m, present: f.member.present };
+        if (neutralChanged) void this.reloadFigure(f);
+        else for (const key of changed) void this.loadInto(f, key);
+      }
     for (const m of members) this.setPresence(m.id, m.present);
   }
 
@@ -518,12 +828,18 @@ export class Stage {
       poses: new Map(),
       cards: new Set(),
       current: member.present ? "neutral" : "away",
+      shown: "",
       seat: seat.clone(),
       yaw: 0,
       targetYaw: 0,
       speaking: false,
+      mouth: 0,
+      flap: false,
+      mouthFrame: "neutral",
+      blinkAt: this.step + 12 + Math.floor(Math.random() * 36),
+      wake: 0,
+      boil: { x: 0, z: 0, r: 0, s: 1 },
       hopT: -1,
-      squash: 0,
       breathe: false,
       gesture: "none",
       gestureT: 0,
@@ -531,6 +847,7 @@ export class Stage {
       targetDim: member.present ? 0 : 1,
       label,
       materials: [],
+      k: null,
     };
     f.yaw = f.targetYaw = this.yawTo(seat, CENTER);
     group.rotation.y = f.yaw;
@@ -538,52 +855,84 @@ export class Stage {
     return f;
   }
 
+  private imgUrl(f: Figure, key: string): string | null {
+    const fig = f.member.figure ?? {};
+    return fig[key]?.img ?? (key === "neutral" ? f.member.personaUrl : key === "away" ? f.member.awayUrl : null) ?? null;
+  }
+
+  /** Load one pose or frame of a figure as a mesh (when there is one) or a cut-out card, at the figure's scale. */
+  private async loadKey(f: Figure, key: string): Promise<THREE.Object3D | null> {
+    const url = this.imgUrl(f, key);
+    const cut = url ? await loadCut(url).catch(() => null) : null;
+    const k = f.k ?? (cut ? FIG_H / Math.max(1, cut.bottom - cut.top) : null);
+    const glb = f.member.figure?.[key]?.glb;
+    if (glb) {
+      try {
+        return await loadGlb(glb, cut && k ? (cut.bottom - cut.top) * k : FIG_H);
+      } catch {
+        /* fall back to the card */
+      }
+    }
+    return cut && k ? makeCard(cut, k) : null;
+  }
+
+  private addKey(f: Figure, key: string, o: THREE.Object3D) {
+    const old = f.poses.get(key);
+    if (old) {
+      f.tilt.remove(old);
+      f.cards.delete(old);
+      f.materials = f.materials.filter(({ m }) => {
+        let keep = true;
+        old.traverse((x: any) => x.material === m && (keep = false));
+        return keep;
+      });
+    }
+    o.visible = false;
+    o.position.y = -PIVOT_Y;
+    f.tilt.add(o);
+    f.poses.set(key, o);
+    if (o.userData.card) f.cards.add(o);
+    o.traverse((x: any) => {
+      if (x.isMesh && x.material && "color" in x.material) f.materials.push({ m: x.material, base: x.material.color.clone() });
+    });
+    f.shown = "";
+  }
+
+  private async loadInto(f: Figure, key: string) {
+    const o = await this.loadKey(f, key);
+    if (o && !this.disposed && this.figures.get(f.member.id) === f) this.addKey(f, key, o);
+  }
+
+  private async reloadFigure(f: Figure) {
+    for (const o of f.poses.values()) f.tilt.remove(o);
+    f.poses.clear();
+    f.cards.clear();
+    f.materials = [];
+    f.shown = "";
+    f.k = null;
+    await this.loadPoses(f, [...this.figures.values()].indexOf(f));
+  }
+
   private async loadPoses(f: Figure, i: number) {
     const fig = f.member.figure ?? {};
     const poses: Pose[] = ["neutral", "happy", "laughing", "surprised", "angry", "sad", "away"];
-    const imgUrl = (p: Pose) => fig[p]?.img ?? (p === "neutral" ? f.member.personaUrl : p === "away" ? f.member.awayUrl : null) ?? null;
     // one scale per figure, from the neutral pose: a slumped or leaning pose keeps its true size
-    let k: number | null = null;
-    const nUrl = imgUrl("neutral");
+    const nUrl = this.imgUrl(f, "neutral");
     if (nUrl) {
       try {
         const n = await loadCut(nUrl);
-        k = FIG_H / Math.max(1, n.bottom - n.top);
+        f.k = FIG_H / Math.max(1, n.bottom - n.top);
       } catch {
         /* no neutral image */
       }
     }
-    const load = async (pose: Pose): Promise<THREE.Object3D | null> => {
-      const url = imgUrl(pose);
-      const cut = url ? await loadCut(url).catch(() => null) : null;
-      const kk = k ?? (cut ? FIG_H / Math.max(1, cut.bottom - cut.top) : null);
-      const glb = fig[pose]?.glb;
-      if (glb) {
-        try {
-          return await loadGlb(glb, cut && kk ? (cut.bottom - cut.top) * kk : FIG_H);
-        } catch {
-          /* fall back to the card */
-        }
-      }
-      return cut && kk ? makeCard(cut, kk) : null;
-    };
-    // neutral and away first (visible immediately), the rest after
-    for (const batch of [["neutral", "away"], poses.filter((p) => p !== "neutral" && p !== "away")] as Pose[][]) {
-      const objs = await Promise.all(batch.map(load));
+    // neutral and away first (visible immediately), then the other poses, then the replacement frames
+    for (const batch of [["neutral", "away"], poses.filter((p) => p !== "neutral" && p !== "away"), FRAMES.filter((x) => fig[x])] as string[][]) {
+      const objs = await Promise.all(batch.map((key) => this.loadKey(f, key)));
       if (this.disposed) return;
-      const add = (p: Pose, o: THREE.Object3D) => {
-        o.visible = false;
-        o.position.y = -PIVOT_Y;
-        f.tilt.add(o);
-        f.poses.set(p, o);
-        if (o.userData.card) f.cards.add(o);
-        o.traverse((x: any) => {
-          if (x.isMesh && x.material && "color" in x.material) f.materials.push({ m: x.material, base: x.material.color.clone() });
-        });
-      };
-      batch.forEach((p, j) => objs[j] && add(p, objs[j]!));
-      if (!f.poses.has("neutral")) add("neutral", defaultFigure((i * 0.17) % 1));
-      this.showPose(f, f.current);
+      batch.forEach((key, j) => objs[j] && this.addKey(f, key, objs[j]!));
+      if (!f.poses.has("neutral")) this.addKey(f, "neutral", defaultFigure((Math.max(0, i) * 0.17) % 1));
+      this.showFrame(f, f.current);
     }
   }
 
@@ -593,10 +942,56 @@ export class Stage {
     return "neutral";
   }
 
+  /** The director's pose for this figure; the picture follows on the next frame. */
   private showPose(f: Figure, pose: Pose) {
     f.current = pose;
-    const shown = this.resolvePose(f, pose);
+    f.flap = false;
+    f.mouthFrame = pose;
+    this.showFrame(f, pose);
+  }
+
+  /** Put one picture on screen: a replacement frame if this figure has it, else the pose it belongs to. */
+  private showFrame(f: Figure, name: string) {
+    let shown = f.poses.has(name) ? name : "";
+    if (!shown) {
+      const base = name === "talk_a" || name === "talk_b" || name === "blink" ? "neutral" : name === "wake" ? "away" : name.replace(/_b$/, "");
+      shown = this.resolvePose(f, base as Pose);
+    }
+    if (shown === f.shown) return;
+    f.shown = shown;
     for (const [p, o] of f.poses) o.visible = p === shown;
+  }
+
+  /** Which picture this figure shows on this frame: mouths follow the voice, laughs cycle, people blink. */
+  private pickFrame(f: Figure): string {
+    const s = this.step;
+    const base = f.current;
+    if (f.wake > 0) {
+      f.wake--;
+      return "wake";
+    }
+    if (base === "laughing") return Math.floor(s / 3) % 2 ? "laughing_b" : "laughing";
+    if (f.speaking) {
+      if (s % 2 === 0) {
+        // replacement mouths, held for two pictures each
+        if (base === "neutral") f.mouthFrame = f.mouth > 0.45 ? "talk_a" : f.mouth > 0.12 ? "talk_b" : "neutral";
+        else {
+          f.flap = f.mouth > 0.18 ? !f.flap : false;
+          f.mouthFrame = f.flap ? `${base}_b` : base;
+        }
+      }
+      return f.mouthFrame;
+    }
+    if (base === "neutral" && f.dim < 0.5) {
+      if (s >= f.blinkAt + 2) f.blinkAt = s + 24 + Math.floor(Math.random() * 48);
+      if (s >= f.blinkAt) return "blink";
+    }
+    return base;
+  }
+
+  /** Asleep → awake (or back): a couple of groggy pictures in between. */
+  private stir(f: Figure) {
+    f.wake = 3;
   }
 
   private yawTo(from: THREE.Vector3, to: THREE.Vector3): number {
@@ -605,6 +1000,7 @@ export class Stage {
 
   /** Back to the table at rest: present members face the table, absent ones sleep. */
   private rest(o: Figure) {
+    if (!o.member.present && o.current !== "away") this.stir(o);
     this.showPose(o, o.member.present ? "neutral" : "away");
     o.targetDim = o.member.present ? 0 : 1;
     o.targetYaw = this.yawTo(o.seat, CENTER);
@@ -627,10 +1023,13 @@ export class Stage {
   // ───────── frame ─────────
 
   private frame() {
-    const dt = Math.min(0.05, this.clock.getDelta());
-    const t = this.clock.elapsedTime;
-    const k = 1 - Math.exp(-dt * 6);
-    const kc = 1 - Math.exp(-dt * 3.6);
+    const now = performance.now();
+    if (now - this.lastStep < 1000 / FPS - 4) return; // hold the picture: stop motion
+    this.lastStep = now;
+    const s = ++this.step;
+    const dt = 1 / FPS;
+    const k = 0.5; // turns settle in a few pictures
+    const kc = 0.42;
     this.look.lerp(this.lookTarget, kc);
     this.fov += (this.fovTarget - this.fov) * kc;
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
@@ -638,8 +1037,9 @@ export class Stage {
       this.camera.updateProjectionMatrix();
     }
     this.camera.position.copy(this.camPos);
-    this.camera.position.y += Math.sin(t * 0.7) * 0.002; // breathing
     this.camera.lookAt(this.look);
+    // set lights drift a hair between exposures
+    if (this.lamp) this.lamp.intensity = this.lampBase * (1 + (Math.random() - 0.5) * 0.035);
     const w = this.root.clientWidth, h = this.root.clientHeight;
     const v = new THREE.Vector3();
     const { rSeat, rTable } = this.ring;
@@ -647,37 +1047,38 @@ export class Stage {
       let dy = f.yaw - f.targetYaw;
       while (dy > Math.PI) dy -= 2 * Math.PI;
       while (dy < -Math.PI) dy += 2 * Math.PI;
-      f.yaw -= dy * k;
+      f.yaw -= Math.abs(dy) < 0.01 ? dy : dy * k;
       f.group.rotation.y = f.yaw;
       // a small bounce when a line starts
       let hop = 0;
       if (f.hopT >= 0) {
         f.hopT += dt;
-        hop = f.hopT < 0.36 ? Math.sin((f.hopT / 0.36) * Math.PI) * 0.025 : 0;
+        hop = f.hopT < 0.34 ? Math.sin((f.hopT / 0.34) * Math.PI) * 0.022 : 0;
       }
+      // clay boil: the figure was touched between every other exposure
+      if (s % 2 === 0) f.boil = { x: (Math.random() - 0.5) * 0.003, z: (Math.random() - 0.5) * 0.003, r: (Math.random() - 0.5) * 0.012, s: 1 + (Math.random() - 0.5) * 0.008 };
       const asleep = f.dim > 0.5;
-      const idle = asleep ? Math.sin(t * 0.9 + f.seat.x * 5) * 0.004 : Math.sin(t * 1.7 + f.seat.x * 9) * 0.003;
-      const breathe = f.breathe ? Math.sin(t * 4) * 0.02 : 0;
-      const sq = f.squash + breathe;
-      f.body.position.y = hop;
-      f.body.scale.set(1 - sq * 0.35, 1 + sq + (asleep ? idle : 0), 1 - sq * 0.35);
+      const breath = asleep ? Math.sin((s / FPS) * 1.6 + f.seat.x * 5) * 0.01 : f.breathe ? Math.sin((s / FPS) * 4) * 0.02 : 0;
+      f.body.position.set(f.boil.x, hop, f.boil.z);
+      f.body.scale.set(f.boil.s, f.boil.s * (1 + breath), f.boil.s);
       // lean and nod around the stool top
       f.gestureT += dt;
-      let tiltX = asleep ? 0 : idle, wig = 0;
+      let tiltX = 0, wig = 0;
       if (f.gesture === "nod") tiltX += Math.sin(f.gestureT * 9) * 0.1 * Math.max(0, 1 - f.gestureT / 1.2);
       if (f.gesture === "shake") wig = Math.sin(f.gestureT * 14) * 0.16 * Math.max(0, 1 - f.gestureT / 1.0);
       if (f.gesture === "lean_in") tiltX += 0.12;
       if (f.gesture === "step_back") tiltX -= 0.07;
-      f.tilt.rotation.set(tiltX, wig, 0);
+      f.tilt.rotation.set(tiltX, wig, f.boil.r);
       // flat cut-outs always face the viewer (a mesh turns for real)
       if (f.cards.size) {
         const toCam = this.yawTo(f.seat, this.camPos) - f.yaw;
         for (const o of f.cards) o.rotation.y = toCam;
       }
-      f.dim += (f.targetDim - f.dim) * k;
+      f.dim += (f.targetDim - f.dim) * 0.4;
       // asleep: pulled in to the table, slumped over its edge
-      f.group.position.copy(f.seat).multiplyScalar(1 - (0.08 * f.dim * this.ring.rTable) / this.ring.rSeat);
+      f.group.position.copy(f.seat).multiplyScalar(1 - (0.08 * f.dim * rTable) / rSeat);
       for (const { m, base } of f.materials) m.color.copy(base).multiplyScalar(1 - 0.3 * f.dim);
+      this.showFrame(f, this.pickFrame(f));
       // name card on the table edge in front of the seat
       v.copy(f.seat).multiplyScalar((rTable - 0.05) / rSeat).setY(TABLE_Y + 0.01).project(this.camera);
       const onScreen = v.z < 1 && v.x > -1.1 && v.x < 1.1;
@@ -686,7 +1087,11 @@ export class Stage {
       f.label.classList.toggle("away", asleep);
       f.label.style.opacity = onScreen ? "1" : "0";
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer && this.bokeh) {
+      // focus on whatever the viewer is looking at (the speaker, or the far side of the table)
+      (this.bokeh.uniforms as any).focus.value = this.camera.position.distanceTo(this.look);
+      this.composer.render();
+    } else this.renderer.render(this.scene, this.camera);
   }
 
   // ───────── audio ─────────
@@ -780,6 +1185,7 @@ export class Stage {
     const f = item.memberId === this.viewerId ? null : this.figures.get(item.memberId) ?? null;
     const others = [...this.figures.values()].filter((x) => x !== f);
     if (f) {
+      if (f.current === "away") this.stir(f);
       f.speaking = true;
       f.breathe = false;
       f.targetDim = 0;
@@ -795,9 +1201,13 @@ export class Stage {
       const r = reactions.get(o.member.id);
       const awake = o.member.present || !!r;
       if (r) {
+        if (o.current === "away" && r.pose !== "away") this.stir(o);
         o.targetDim = 0;
         this.showPose(o, r.pose);
-      } else this.showPose(o, o.member.present ? "neutral" : "away");
+      } else {
+        if (!o.member.present && o.current !== "away") this.stir(o);
+        this.showPose(o, o.member.present ? "neutral" : "away");
+      }
       if (!r && !o.member.present) o.targetDim = 1;
       const look = r?.look ?? (awake ? "speaker" : "down");
       o.targetYaw =
@@ -828,8 +1238,8 @@ export class Stage {
         const elapsed = audio ? audio.currentTime * 1000 : (performance.now() - t0) * speed;
         if (f) {
           const env = item.envelope ?? [];
-          const v = env.length ? env[Math.min(env.length - 1, Math.floor((elapsed / 1000) * ENV_FPS))] ?? 0 : audio ? 0 : 0.35 + 0.35 * Math.sin(elapsed / 90);
-          f.squash = 0.04 * v;
+          f.mouth =
+            item.status === "silent" ? 0 : env.length ? env[Math.min(env.length - 1, Math.floor((elapsed / 1000) * ENV_FPS))] ?? 0 : audio ? 0.4 : 0.3 + 0.3 * Math.sin(elapsed / 110);
         }
         const ended = audio ? audio.ended || (audio.paused && audio.currentTime > 0) : performance.now() - t0 >= dur;
         if (ended) return resolve();
@@ -839,7 +1249,7 @@ export class Stage {
     });
     if (audio && !audio.ended) audio.pause();
     if (f) {
-      f.squash = 0;
+      f.mouth = 0;
       f.hopT = -1;
       f.speaking = false;
       f.gesture = "none";
@@ -895,6 +1305,7 @@ export class Stage {
     this.renderer.setAnimationLoop(null);
     this.ro.disconnect();
     this.clearFigures();
+    this.composer?.dispose();
     this.renderer.dispose();
     this.root.remove();
   }
