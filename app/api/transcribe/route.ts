@@ -2,6 +2,7 @@ import { Ledger } from "@/core/ledger";
 import { transcribe } from "@/core/meta";
 import { toVtWav } from "@/core/wav";
 import { authMember, saveLedger, jsonError, HttpError } from "@/server/db";
+import { assertDailySpend, assertRoomOp } from "@/server/quota";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
@@ -13,6 +14,8 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const { member } = await authMember(String(form.get("memberId")), String(form.get("secret")));
     roomId = member.room_id;
+    await assertDailySpend();
+    await assertRoomOp(member.room_id, "message.transcribe", 300);
     const audio = form.get("audio");
     if (!(audio instanceof Blob)) throw new HttpError(400, "audio is required");
     if (audio.size > 3_000_000) throw new HttpError(413, "recording too long (max ~60 s)");

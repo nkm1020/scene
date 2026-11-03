@@ -2,6 +2,7 @@ import { Ledger } from "@/core/ledger";
 import { verifyEnrollment } from "@/core/voice";
 import { ENROLL_SENTENCES } from "@/core/seed";
 import { authMember, db, saveLedger, jsonError, HttpError } from "@/server/db";
+import { assertDailySpend, assertRoomOp } from "@/server/quota";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -13,6 +14,8 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const { member } = await authMember(String(form.get("memberId")), String(form.get("secret")));
     roomId = member.room_id;
+    await assertDailySpend();
+    await assertRoomOp(member.room_id, "enroll.readback", 30);
     const lang = form.get("lang") === "ko" ? "ko" : "en";
     const audio = form.get("audio");
     if (!(audio instanceof Blob)) throw new HttpError(400, "audio is required");

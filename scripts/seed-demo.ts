@@ -68,4 +68,8 @@ for (const msg of SEED_MESSAGES) {
     .throwOnError();
   console.log(msg.id, r.status, r.attempts.map((a) => a.similarity.toFixed(2)).join("→"));
 }
+// Keep the seeding cost on the room's receipt.
+await db.from("ledger").insert(
+  ledger.entries.map((e) => ({ room_id: TPL, model: e.model, op: e.op, ms: e.ms, usd: e.usd, ok: e.ok, input_tokens: e.inputTokens ?? null, output_tokens: e.outputTokens ?? null, reasoning_tokens: e.reasoningTokens ?? null, audio_ms: e.audioMs ?? null, note: e.note ?? null, at: e.at })),
+);
 console.log(JSON.stringify(ledger.summary()));

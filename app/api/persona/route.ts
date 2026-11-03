@@ -2,6 +2,7 @@ import { Ledger } from "@/core/ledger";
 import { after } from "next/server";
 import { createPersona, createAwayPose } from "@/core/persona";
 import { authMember, db, publicUrl, saveLedger, jsonError, HttpError } from "@/server/db";
+import { assertDailySpend, assertRoomOp } from "@/server/quota";
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
@@ -14,6 +15,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { member } = await authMember(body.memberId, body.secret);
     roomId = member.room_id;
+    await assertDailySpend();
+    await assertRoomOp(member.room_id, "persona.draw", 12); // ~2 tries for each of 6 seats
     const spec = { name: member.name, hair: clean(body.hair), outfit: clean(body.outfit), vibe: clean(body.vibe) };
     if (!spec.hair || !spec.outfit || !spec.vibe) throw new HttpError(400, "pick hair, outfit and vibe");
     const t0 = Date.now();

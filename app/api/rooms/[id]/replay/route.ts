@@ -1,6 +1,7 @@
 import { Ledger } from "@/core/ledger";
 import { directSegment, MAX_SEGMENT } from "@/core/director";
 import { db, saveLedger, jsonError } from "@/server/db";
+import { assertDailySpend, assertRoomOp } from "@/server/quota";
 import { renderMessage } from "@/server/render";
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -10,6 +11,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const ledger = new Ledger();
   const { id } = await params;
   try {
+    await assertDailySpend();
+    await assertRoomOp(id, "director.spark", 60);
     const body = await req.json().catch(() => ({}));
     const afterSeq = Number(body.afterSeq ?? 0);
     const { data: msgs, error } = await db()

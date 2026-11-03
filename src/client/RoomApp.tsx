@@ -95,7 +95,13 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     if (!stage.current) stage.current = createStage(stageHost.current, { members: stageMembers, viewerId: creds?.memberId ?? null });
     else stage.current.setMembers(stageMembers);
   }, [joined, stageMembers, state, creds?.memberId]);
-  useEffect(() => () => stage.current?.destroy(), []);
+  useEffect(
+    () => () => {
+      stage.current?.destroy();
+      stage.current = null;
+    },
+    [],
+  );
 
   // Live performance queue (messages that arrive while you're here)
   const pump = useCallback(async () => {

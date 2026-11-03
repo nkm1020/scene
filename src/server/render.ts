@@ -4,6 +4,7 @@ import { ruleDirection } from "@/core/director";
 import { renderVoice, type VoiceSpec } from "@/core/voice";
 import { ttsEndpoint } from "@/core/tts";
 import { db, publicUrl, saveLedger } from "./db";
+import { assertDailySpend } from "./quota";
 
 /** Voice for a member: enrolled reference (private bucket) or preset. Null when TTS is off. */
 export async function memberVoice(memberId: string): Promise<VoiceSpec | null> {
@@ -28,7 +29,12 @@ export async function renderMessage(msg: { id: string; room_id: string; member_i
   const d = ruleDirection({ id: msg.id, sender_id: msg.member_id, text: msg.text });
   await db().from("renders").upsert({ message_id: msg.id, room_id: msg.room_id, status: "pending", emotion: d.emotion, gesture: d.gesture, camera: d.camera, pause_ms: d.pause_ms, direction_source: "rules" });
   try {
-    const voice = await memberVoice(msg.member_id);
+    let voice = await memberVoice(msg.member_id);
+    try {
+      await assertDailySpend();
+    } catch {
+      voice = null; // over today's budget: captions only, flagged
+    }
     const r = await renderVoice(msg.text, voice, { ledger });
     let audio_url: string | null = null;
     if (r.wav) {
