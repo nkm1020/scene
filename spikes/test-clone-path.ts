@@ -1,21 +1,19 @@
 // End-to-end check of the web clone path with a stand-in recording (a preset voice reading the Korean enrollment
 // sentences). Real users record themselves in the browser; this only exercises the server path.
 import "dotenv/config";
-import { synthesize } from "../src/core/tts";
 import { ENROLL_SENTENCES } from "../src/core/seed";
 const BASE = "http://localhost:3000";
 const j = async (r: Response) => { const d = await r.json(); if (!r.ok) throw new Error(JSON.stringify(d)); return d; };
 const { roomId } = await j(await fetch(`${BASE}/api/rooms`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "clone path test" }) }));
 const { member, secret } = await j(await fetch(`${BASE}/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Kim", preset: "male" }) }));
 console.log("room", roomId, "member", member.id);
-import { decodeWav, encodeWav } from "../src/core/wav";
-const parts = [];
-for (const s of ENROLL_SENTENCES.ko) parts.push(decodeWav((await synthesize(s, { preset: "sohee" }, { language: "ko", seed: 3 })).wav));
-const gap = new Float32Array(Math.round(parts[0].sampleRate * 0.4));
-const joined = new Float32Array(parts.reduce((n, p) => n + p.samples.length + gap.length, 0));
-let off = 0;
-for (const p of parts) { joined.set(p.samples, off); off += p.samples.length + gap.length; }
-const rec = { wav: encodeWav({ sampleRate: parts[0].sampleRate, samples: joined }), durationMs: Math.round((joined.length / parts[0].sampleRate) * 1000) };
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+// Stand-in recording: macOS "Yuna" reads the three Korean enrollment sentences.
+execFileSync("say", ["-v", "Yuna", "-o", "/tmp/scene-enroll.aiff", ENROLL_SENTENCES.ko.join(" ")]);
+execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", "/tmp/scene-enroll.aiff", "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", "/tmp/scene-enroll.wav"]);
+const wavBytes = readFileSync("/tmp/scene-enroll.wav");
+const rec = { wav: wavBytes, durationMs: Math.round(((wavBytes.length - 44) / 48000) * 1000) };
 console.log("stand-in recording", rec.durationMs, "ms");
 const fd = new FormData();
 fd.append("memberId", member.id); fd.append("secret", secret); fd.append("lang", "ko");
