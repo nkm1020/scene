@@ -2,7 +2,7 @@
 
 # Scene: your group chat, performed
 
-You sit at a round table with your friends as clay figures, seen from your own seat. When a message arrives, you turn to its sender and they say it to you in their own voice; everyone else at the table turns and reacts. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
+A group chat with a new layout. You sit at a round table in a miniature stop-motion dining room with your friends as clay figures, seen from your own seat. When a message arrives, you turn to its sender and they say it to you in their own voice, the line in a bubble over their head; everyone else at the table turns and reacts. Your own lines appear at the bottom, where you said them. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
 
 Theme: **Build for Your World** · Track: Indie Developer · Meta AI Developer Hackathon 2026
 
@@ -15,6 +15,8 @@ Turn the external voice off and Scene still works: the figures, the performance 
 | What you see | Made by |
 |---|---|
 | **Your figure.** Three words become a clay figurine, then six more versions of the same figurine: happy, laughing, surprised, annoyed, sad, asleep. Then stop-motion replacement frames: mouth shapes, a blink, a groggy wake-up, the other half of each expression. The table runs at 12 pictures a second and swaps them like a stop-motion film swaps faces. | **Muse Image** sculpts the figurine and edits it into each expression (same character). **SAM 3.1** masks the figurine in every image. **SAM 3D Objects** lifts each masked image into a mesh that sits at the table. |
+| **Dress your figure; the face never changes.** Like an avatar builder: open Hair, Top or Extras and six options appear, drawn on your own figure. Or say it ("빨간 비니 씌워줘"). Whatever you pick, your face stays pixel for pixel. | **Muse Image** draws every option on your figure. **SAM 3.1** found your face once; code pastes it back onto each edit (glasses and hat brims, cut out by SAM 3.1, stay on top). Said changes: **Voice Transcribe** writes them down, **Muse Spark** turns them into one edit, `validateSaid` checks it. |
+| **Demo friends.** Alone in a room? Seat Sam, Mina or Jay. They answer what you post, in character, and their replies are performed like anyone's. | **Muse Spark** proposes up to two replies; `validateReplies` keeps only short lines from friends who are at the table. |
 | **The performance.** Who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. |
 | **Talking.** Hold to talk; your words become the message. | **Muse Voice Transcribe**. |
 | **The guarantee.** A line plays in a voice only if it says exactly the message. | **Muse Voice Transcribe** listens to every synthesized line and compares it with the message. |
@@ -44,8 +46,14 @@ Prefer not to run anything? [`examples/demo-room/replay.html`](examples/demo-roo
 
 ```
 Make a figure (once per person, about a minute)
-  3 words ─▶ Muse Image: clay figurine ─▶ Muse Image edits: happy, laughing, surprised, annoyed, sad, asleep
-           ─▶ SAM 3.1 masks the figurine in each image ─▶ SAM 3D Objects: one mesh per expression (GLB)
+  3 words ─▶ Muse Image: clay figurine ─▶ SAM 3.1: the figurine's mask and its face (kept for the lookbook)
+
+Dress it (any number of times; the face never changes)
+  tab ─▶ Muse Image edits your figure six ways (in parallel, streamed) ─▶ paste the original face back (SAM 3.1 face mask,
+         minus glasses / hat found by SAM 3.1 on the edit) ─▶ pick one ─▶ SAM 3.1 cut-out ─▶ it is your neutral figure
+  "say it" ─▶ Voice Transcribe ─▶ Spark: {part, change, overFace} ─▶ validateSaid ─▶ the same edit + face lock
+  Done ─▶ Muse Image edits: happy, laughing, surprised, annoyed, sad, asleep + stop-motion frames
+       ─▶ SAM 3.1 masks each one ─▶ SAM 3D Objects: one mesh per expression (GLB, with FAL_KEY)
 
 Send
   hold to talk ─▶ Muse Voice Transcribe ─▶ 1.5 s preview (tap to edit) ─▶ message = text (audio discarded)
