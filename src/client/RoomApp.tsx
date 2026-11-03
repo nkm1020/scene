@@ -9,6 +9,7 @@ import { Recorder } from "./audio";
 import { ENROLL_SENTENCES } from "@/core/seed";
 import { castHere } from "@/core/cast";
 import { Icon, Mark } from "./ui";
+import FigureStudio from "./FigureStudio";
 
 type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; figure?: FigureAssets | null; figure_status?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
 type Message = { id: string; room_id: string; member_id: string; seq: number; text: string; created_at: string };
@@ -30,9 +31,6 @@ type Render = {
 };
 type RoomState = { room: { id: string; name: string; is_demo: boolean }; members: Member[]; messages: Message[]; renders: Render[] };
 
-const HAIR = ["short messy black hair", "long wavy brown hair", "curly red hair", "blond bob", "silver buzz cut", "pink ponytail"];
-const OUTFIT = ["green hoodie", "denim jacket", "yellow cardigan", "black turtleneck", "striped tee", "red varsity jacket"];
-const VIBE = ["cheerful", "calm", "playful", "smug", "sleepy", "bold"];
 
 function toItem(m: Message, r: Render | undefined, roster?: { member_id: string; name: string; present: boolean }[]): PerformItem {
   // Reactions: the director's (Spark) when stored, else the rule table with live presence.
@@ -639,114 +637,10 @@ function Join({ roomId, roomName, onDone }: { roomId: string; roomName: string; 
             <p className="fine">No account, no email. A private key for this room stays in this browser.</p>
           </>
         )}
-        {step === "persona" && creds && <PersonaStep creds={creds} onNext={() => setStep("voice")} />}
+        {step === "persona" && creds && <FigureStudio creds={creds} onDone={() => setStep("voice")} />}
         {step === "voice" && creds && <VoiceStep creds={creds} onNext={() => onDone(creds)} />}
       </div>
     </div>
-  );
-}
-
-function Pick({ label, options, value, set, busy }: { label: string; options: string[]; value: string; set: (v: string) => void; busy: boolean }) {
-  return (
-    <>
-      <label>{label}</label>
-      <div className="chips">
-        {options.map((o) => (
-          <button key={o} className={`chip ${value === o ? "on" : ""}`} onClick={() => set(o)} disabled={busy}>
-            {o}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function FigurePreview({ figure, name }: { figure: FigureAssets; name: string }) {
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!host.current) return;
-    const st = createStage(host.current, { members: [{ id: "me", name, figure, present: true }], viewerId: null, quiet: true, showMark: false });
-    return () => st.destroy();
-  }, [figure, name]);
-  return <div className="figure-preview" ref={host} />;
-}
-
-function PersonaStep({ creds, onNext, compact }: { creds: Creds; onNext: () => void; compact?: boolean }) {
-  const [hair, setHair] = useState(HAIR[0]);
-  const [outfit, setOutfit] = useState(OUTFIT[0]);
-  const [vibe, setVibe] = useState(VIBE[0]);
-  const [busy, setBusy] = useState(false);
-  const [phase, setPhase] = useState("");
-  const [result, setResult] = useState<{ neutral: { img: string; glb: string | null }; ms: number; usd: number; threeD: boolean } | null>(null);
-  const [tries, setTries] = useState(0);
-  const [err, setErr] = useState("");
-
-  const make = async () => {
-    setBusy(true);
-    setErr("");
-    setPhase("Muse Image is sculpting your figurine");
-    const t1 = setTimeout(() => setPhase("SAM 3.1 is cutting it out"), 11000);
-    const t2 = setTimeout(() => setPhase("SAM 3D is lifting it into 3D"), 15000);
-    try {
-      const r = await api("/api/figure", { method: "POST", json: { ...creds, hair, outfit, vibe } });
-      setResult(r);
-      setTries((n) => n + 1);
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      setBusy(false);
-      setPhase("");
-    }
-  };
-  return (
-    <>
-      {!compact && <h1>Your figurine</h1>}
-      <p className="muted">Pick three things. Muse Image sculpts a clay you, SAM 3.1 cuts it out, and SAM 3D turns it into a figure that sits at the table. Six expressions follow in the background.</p>
-      {result ? (
-        <div className="persona-result">
-          <FigurePreview figure={{ neutral: result.neutral }} name="You" />
-          <p className="fine">
-            {(result.ms / 1000).toFixed(0)} s · ${result.usd.toFixed(3)}
-            {result.threeD ? " · 3D" : " · picture only for now"}
-          </p>
-        </div>
-      ) : (
-        <>
-          <Pick label="Hair" options={HAIR} value={hair} set={setHair} busy={busy} />
-          <Pick label="Outfit" options={OUTFIT} value={outfit} set={setOutfit} busy={busy} />
-          <Pick label="Vibe" options={VIBE} value={vibe} set={setVibe} busy={busy} />
-        </>
-      )}
-      {phase && <p className="pulse muted">{phase}…</p>}
-      {err && <p className="err">{err}</p>}
-      <div className="row">
-        {result ? (
-          <>
-            {tries < 2 && (
-              <button className="ghost" onClick={() => setResult(null)} disabled={busy}>
-                Try again
-              </button>
-            )}
-            <button className="primary" onClick={onNext}>
-              Use this
-            </button>
-          </>
-        ) : (
-          <>
-            {!compact && (
-              <button className="ghost" onClick={onNext} disabled={busy}>
-                Skip
-              </button>
-            )}
-            <button className="primary" onClick={make} disabled={busy}>
-              {busy ? "Sculpting…" : "Make my figurine"}
-            </button>
-          </>
-        )}
-      </div>
-    </>
   );
 }
 
@@ -859,16 +753,17 @@ function Settings({ roomId, creds, me, onClose, onChanged }: { roomId: string; c
     <div className="sheet-wrap" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
-          <b>{view === "main" ? "Settings" : view === "persona" ? "Remake persona" : "Register voice"}</b>
-          <button className="ghost small" onClick={view === "main" ? onClose : () => setView("main")}>
-            {view === "main" ? "Close" : "Back"}
+          {view === "main" ? "You" : view === "persona" ? "Your figure" : "Your voice"}
+          <button className="icon-btn" onClick={view === "main" ? onClose : () => setView("main")} aria-label={view === "main" ? "Close" : "Back"}>
+            <Icon name="close" />
           </button>
         </div>
         {view === "persona" && (
-          <PersonaStep
+          <FigureStudio
             creds={creds}
             compact
-            onNext={() => {
+            neutral={me?.persona_url ?? null}
+            onDone={() => {
               onChanged();
               setView("main");
             }}
@@ -887,11 +782,11 @@ function Settings({ roomId, creds, me, onClose, onChanged }: { roomId: string; c
         {view === "main" && (
           <>
             <section>
-              <h3>Your persona</h3>
+              <h3>Your figure</h3>
               <div className="row">
-                {me?.persona_url ? <img className="thumb" src={me.persona_url} alt="" /> : <span className="muted">Default persona</span>}
+                {me?.persona_url ? <img className="thumb" src={me.persona_url} alt="" /> : <span className="muted">A plain clay figure for now</span>}
                 <button className="ghost small" onClick={() => setView("persona")}>
-                  {me?.persona_url ? "Remake" : "Create"}
+                  {me?.persona_url ? "Dress" : "Make"}
                 </button>
                 {me?.persona_url && (
                   <button className="ghost small danger" onClick={() => del("persona")}>

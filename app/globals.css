@@ -127,3 +127,25 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
 .invite-row input{flex:1;font-size:13px;color:var(--muted)}
 table.rec{width:100%;border-collapse:collapse;font-size:13px}table.rec td,table.rec th{text-align:left;padding:8px 4px;border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums}table.rec td:not(:first-child),table.rec th:not(:first-child){text-align:right}table.rec th{color:var(--faint);font-weight:400}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* figure studio: the figure big, its options as a grid drawn on it */
+.studio h1{font-size:24px;line-height:1.15;letter-spacing:-.01em;margin:0 0 8px;font-weight:600}
+.studio .figure-preview{height:min(42dvh,340px);margin:4px 0 14px}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 12px;scrollbar-width:none}
+.tabs button{height:36px;padding:0 14px;border-radius:var(--radius-control);color:var(--muted);font-weight:500;font-size:14px;white-space:nowrap;transition:background .15s,color .15s}
+.tabs button:hover{color:#fff}
+.tabs button.on{background:var(--raised);color:#fff}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{display:flex;flex-direction:column;gap:6px;text-align:left;border-radius:16px;transition:transform .12s}
+.tile img,.tile .tile-blank{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px;background:var(--raised)}
+.tile .tile-blank{display:grid;place-items:center;font-size:12px;color:var(--faint);text-align:center;padding:8px}
+.tile .tile-label{font-size:13px;color:var(--muted);line-height:1.25}
+.tile:hover:not(:disabled) .tile-label{color:#fff}
+.tile:active:not(:disabled){transform:scale(.97)}
+.tile.on img{outline:2px solid #fff;outline-offset:2px}
+.tile:disabled{opacity:1;cursor:default}
+.tile.wait .tile-blank{animation:pulse 1.4s ease-in-out infinite}
+.say{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.say input{flex:1 1 180px}
+.say .icon-btn.live{background:var(--accent);color:#000}
+.say-state{flex-basis:100%;margin:0}

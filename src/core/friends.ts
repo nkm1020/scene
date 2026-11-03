@@ -79,7 +79,7 @@ export async function proposeReplies(
         },
       },
     },
-    { reasoningEffort: "minimal", maxTokens: 600, op: "friends.reply", ledger: opts.ledger },
+    { reasoningEffort: "minimal", maxTokens: 2000, op: "friends.reply", ledger: opts.ledger },
   );
   return validateReplies(res.data, ids, history.at(-1)!.text);
 }
