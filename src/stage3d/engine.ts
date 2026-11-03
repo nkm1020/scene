@@ -358,6 +358,7 @@ interface Figure {
   seat: THREE.Vector3;
   yaw: number;
   targetYaw: number;
+  turn: SCurve; // the body turn in progress
   speaking: boolean;
   mouth: number; // loudness of the line being said, 0..1
   flap: boolean;
@@ -374,6 +375,39 @@ interface Figure {
   label: HTMLDivElement;
   materials: { m: THREE.MeshStandardMaterial; base: THREE.Color }[];
   k: number | null; // world units per image pixel, from the neutral cut-out
+}
+
+/**
+ * One value moving on an S curve, the way an animator spaces a turn: slow out, fast through the middle, slow in.
+ * Quintic Hermite from p0 (leaving at speed v0, so an interrupted move never stops dead) to p1 at rest. Times in ms.
+ */
+class SCurve {
+  t0 = 0;
+  dur = 0;
+  p0: number;
+  v0 = 0;
+  p1: number;
+  constructor(v: number) {
+    this.p0 = this.p1 = v;
+  }
+  /** [value, velocity per ms] at time t */
+  at(t: number): [number, number] {
+    const u = this.dur > 0 ? Math.min(1, Math.max(0, (t - this.t0) / this.dur)) : 1;
+    const u2 = u * u, u3 = u2 * u, u4 = u3 * u, u5 = u4 * u;
+    const h5 = 10 * u3 - 15 * u4 + 6 * u5;
+    const p = this.p0 + (this.p1 - this.p0) * h5 + this.v0 * this.dur * (u - 6 * u3 + 8 * u4 - 3 * u5);
+    if (u >= 1 || this.dur <= 0) return [p, 0];
+    const v = ((this.p1 - this.p0) * (30 * u2 - 60 * u3 + 30 * u4)) / this.dur + this.v0 * (1 - 18 * u2 + 32 * u3 - 15 * u4);
+    return [p, v];
+  }
+  to(target: number, t: number, dur: number) {
+    const [p, v] = this.at(t);
+    this.p0 = p;
+    this.v0 = (target - p) * v > 0 ? v : 0; // keep speed only if it already heads there
+    this.p1 = target;
+    this.t0 = t;
+    this.dur = dur;
+  }
 }
 
 const loader = new GLTFLoader();
@@ -830,6 +864,7 @@ export class Stage {
       seat: seat.clone(),
       yaw: 0,
       targetYaw: 0,
+      turn: new SCurve(0),
       speaking: false,
       mouth: 0,
       flap: false,
@@ -848,6 +883,7 @@ export class Stage {
       k: null,
     };
     f.yaw = f.targetYaw = this.yawTo(seat, CENTER);
+    f.turn = new SCurve(f.yaw);
     group.rotation.y = f.yaw;
     void this.loadPoses(f, i);
     return f;
@@ -1026,7 +1062,6 @@ export class Stage {
     this.lastStep = now;
     const s = ++this.step;
     const dt = 1 / FPS;
-    const k = 0.5; // turns settle in a few pictures
     this.sampleMove(now);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
@@ -1040,10 +1075,12 @@ export class Stage {
     const v = new THREE.Vector3();
     const { rSeat, rTable } = this.ring;
     for (const f of this.figures.values()) {
-      let dy = f.yaw - f.targetYaw;
+      // body turns on an S curve; a quarter turn takes about half a second
+      let dy = f.targetYaw - f.turn.p1;
       while (dy > Math.PI) dy -= 2 * Math.PI;
       while (dy < -Math.PI) dy += 2 * Math.PI;
-      f.yaw -= Math.abs(dy) < 0.01 ? dy : dy * k;
+      if (Math.abs(dy) > 1e-3) f.turn.to(f.turn.p1 + dy, now, (Math.min(0.9, 0.28 + 0.38 * Math.abs(dy)) * 1000) / (this.current?.speed ?? 1));
+      f.yaw = f.turn.at(now)[0];
       f.group.rotation.y = f.yaw;
       // a small bounce when a line starts
       let hop = 0;

@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { authMember, db, jsonError, HttpError } from "@/server/db";
 import { assertRoomQuota } from "@/server/rooms";
 import { renderMessage } from "@/server/render";
+import { replyAsFriends } from "@/server/friends";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
@@ -16,7 +17,10 @@ export async function POST(req: Request) {
     await assertRoomQuota(member.room_id);
     const { data: msg, error } = await db().from("messages").insert({ room_id: member.room_id, member_id: member.id, text }).select("*").single();
     if (error) throw error;
-    after(() => renderMessage(msg));
+    after(async () => {
+      await renderMessage(msg);
+      await replyAsFriends(msg);
+    });
     return Response.json({ message: msg });
   } catch (e) {
     return jsonError(e);
