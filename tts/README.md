@@ -26,7 +26,9 @@ All calls except `/health` need `Authorization: Bearer $TTS_TOKEN`.
   "language": "ko",               // "ko" | "en" | "auto" (also zh, ja, de, fr, ru, pt, es, it)
   "voice": {"preset": "sohee"},   // or {"ref_audio_b64": "<wav base64>", "ref_text": "<transcript of the ref>"}
   "seed": 7,                      // optional, makes output repeatable
-  "speed": 1.0                    // optional, 0.5-2.0, time-stretch after synthesis
+  "speed": 1.0,                   // optional, 0.5-2.0, time-stretch after synthesis
+  "temperature": 0.65,            // optional sampling temperature (package default 0.9 invents words more often)
+  "top_p": 0.85                   // optional
 }
 ```
 

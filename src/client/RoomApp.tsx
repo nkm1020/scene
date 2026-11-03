@@ -388,6 +388,31 @@ function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; on
     }
   };
 
+  // Desktop: hold Space to talk (ignored while typing in a field).
+  const startRef = useRef(startRec);
+  const stopRef = useRef(stopRec);
+  startRef.current = startRec;
+  stopRef.current = stopRec;
+  useEffect(() => {
+    const typingTarget = (e: KeyboardEvent) => e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || typingTarget(e)) return;
+      e.preventDefault();
+      void startRef.current();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || typingTarget(e)) return;
+      e.preventDefault();
+      void stopRef.current();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+
   return (
     <div className="composer">
       {preview !== null && (
@@ -452,6 +477,7 @@ function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; on
             onContextMenu={(e) => e.preventDefault()}
           >
             {recording ? "Release to send" : "Hold to talk"}
+            <span className="kbd-hint">or hold Space</span>
           </button>
           <div className="me-chip">{me?.persona_url ? <img src={me.persona_url} alt="" /> : <span>{me?.name?.[0] ?? "?"}</span>}</div>
         </div>

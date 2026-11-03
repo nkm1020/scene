@@ -72,7 +72,21 @@ External: **Qwen3-TTS** (Apache 2.0, self-hosted on Modal) for voice only — Me
 
 ## Numbers
 
-<!-- NUMBERS -->
+Measured on Nov 3, 2026 from the receipts (`out/receipt.json`, the `ledger` table). Standard tier prices.
+
+| Step | Model | Latency | Cost |
+|---|---|---|---|
+| Persona: draw + cut out | Muse Image → SAM 3.1 | 12–23 s | $0.0125 |
+| Away pose: edit + cut out (after the persona is shown) | Muse Image edit → SAM 3.1 | 17–28 s, in the background | $0.0125 |
+| Hold to talk → text (5 s of speech) | Voice Transcribe | 1.6–3.0 s | $0.00025 |
+| Voice enrollment read-back (15 s) | Voice Transcribe | ~1.5 s | $0.00075 |
+| Replay direction, 12 lines, one call | Spark 1.3, `reasoning_effort: minimal` | ~7 s | ~$0.004 |
+| Replay direction, 12 lines, one call | Spark 1.3, `reasoning_effort: low` | ~12 s | ~$0.007 |
+| Read-back of one synthesized line | Voice Transcribe | 1.5–2 s | ~$0.0001 |
+
+<!-- TTS-NUMBERS -->
+
+**What the read-back check caught.** Seeding the demo room on Nov 3, Qwen3-TTS (default sampling) produced lines Scene refused to play: it invented a name before "do not tell Jay" (*"Tangira Blackford said, do not tell Jay."*), babbled Chinese before "I'll bring the cake", and looped a 2-second line into 20 seconds. Voice Transcribe heard each one, the score fell to 0.00, and Scene synthesized again until the clip matched. An earlier, more lenient score let a garbled English line read by a Korean-native preset pass at 0.88 (*"약 그 So who's bringing the cake으로"*); that case is now a regression test, and presets are chosen per language.
 
 ## Privacy
 
