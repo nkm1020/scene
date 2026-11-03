@@ -8,6 +8,7 @@ import { api, loadCreds, saveCreds, lastSeen, setLastSeen, type Creds } from "./
 import { Recorder } from "./audio";
 import { ENROLL_SENTENCES } from "@/core/seed";
 import { castHere } from "@/core/cast";
+import { Icon, Mark } from "./ui";
 
 type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; figure?: FigureAssets | null; figure_status?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
 type Message = { id: string; room_id: string; member_id: string; seq: number; text: string; created_at: string };
@@ -67,6 +68,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   const [mode, setMode] = useState<"idle" | "directing" | "replaying">("idle");
   const [directorNote, setDirectorNote] = useState<string>("");
   const [settings, setSettings] = useState(false);
+  const [friends, setFriends] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [progress, setProgress] = useState<{ i: number; n: number } | null>(null);
   const stageHost = useRef<HTMLDivElement>(null);
@@ -196,8 +198,11 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     for (const m of state?.members ?? []) stage.current?.setPresence(m.id, present.has(m.id));
   }, [present, state?.members]);
 
+  // missed = what was said before you opened the room; anything after that is performed live as it arrives
+  const openSeq = useRef<number | null>(null);
+  if (state && openSeq.current === null) openSeq.current = state.messages.at(-1)?.seq ?? 0;
   const missed = useMemo(
-    () => (state?.messages ?? []).filter((m) => m.seq > seen && m.member_id !== creds?.memberId && !liveSeen.has(m.id)),
+    () => (state?.messages ?? []).filter((m) => m.seq > seen && m.seq <= (openSeq.current ?? 0) && m.member_id !== creds?.memberId && !liveSeen.has(m.id)),
     [state, seen, creds, liveSeen],
   );
 
@@ -269,31 +274,31 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   return (
     <div className="room">
       <header className="room-top">
-        <div>
-          <div className="room-name">{state.room.name}</div>
-          <div className="room-sub">
-            {state.members.length} seats · {present.size} here
+        <div className="room-id">
+          <Mark label={false} />
+          <div>
+            <div className="room-name">{state.room.name}</div>
+            <div className="room-sub num">
+              {state.members.length} at the table · {present.size} here
+            </div>
           </div>
         </div>
         <div className="top-actions">
-          <button
-            className="ghost"
-            onClick={() => {
-              void navigator.clipboard?.writeText(location.href);
-              setDirectorNote("Invite link copied");
-            }}
-          >
-            Invite
+          <button className="icon-btn" onClick={() => setFriends(true)} aria-label="Add a friend" title="Add a friend">
+            <Icon name="addFriend" />
           </button>
-          <button className="ghost" onClick={() => setSettings(true)} aria-label="Settings">
-            ⚙︎
+          <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Your figure, voice and receipt" title="Your figure, voice and receipt">
+            <Icon name="sliders" />
           </button>
         </div>
       </header>
       <div className="stage-host" ref={stageHost}>
         {mode === "idle" && missed.length > 0 && (
           <button className="missed-pill" onClick={playMissed}>
-            ▶ {missed.length} missed · Play
+            <Icon name="play" />
+            <span>
+              <b>{missed.length}</b> missed · Play
+            </span>
           </button>
         )}
         {mode === "directing" && <div className="director-note pulse">{directorNote}</div>}
@@ -321,21 +326,98 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         {mode === "idle" && missed.length === 0 && directorNote && <div className="director-note fade">{directorNote}</div>}
         {state.members.length <= 1 && (
           <div className="empty-room">
-            <p>Your seat is the camera. Friends you invite will sit around this table.</p>
-            <button
-              className="primary"
-              onClick={() => {
-                void navigator.clipboard?.writeText(location.href);
-                setDirectorNote("Invite link copied");
-              }}
-            >
-              Copy invite link
+            <p>You sit here, at the camera. Seat a friend and they appear across the table.</p>
+            <button className="primary" onClick={() => setFriends(true)}>
+              Add a friend
             </button>
           </div>
         )}
       </div>
       <Composer creds={creds} me={me} onSent={() => void 0} disabled={mode !== "idle"} />
+      {friends && <FriendsSheet roomId={roomId} creds={creds} members={state.members} onClose={() => setFriends(false)} onAdded={() => void reload()} />}
       {settings && <Settings roomId={roomId} creds={creds} me={me} onClose={() => setSettings(false)} onChanged={() => void reload()} />}
+    </div>
+  );
+}
+
+// ───────────────────────────── Add a friend: demo friends (played by Spark) or an invite link ─────────────────────────────
+
+type DemoFriend = { id: string; name: string; persona: string };
+const SEED_FACE: Record<string, string> = { sam: "/seed/figures/sam/neutral.webp", mina: "/seed/figures/mina/neutral.webp", jay: "/seed/figures/jay/neutral.webp" };
+
+function FriendsSheet({ roomId, creds, members, onClose, onAdded }: { roomId: string; creds: Creds; members: Member[]; onClose: () => void; onAdded: () => void }) {
+  const [list, setList] = useState<DemoFriend[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    api<{ friends: DemoFriend[] }>(`/api/rooms/${roomId}/friends`).then((r) => setList(r.friends), (e) => setErr(e.message));
+  }, [roomId]);
+  const seat = async (id: string) => {
+    setBusy(id);
+    setErr("");
+    try {
+      await api(`/api/rooms/${roomId}/friends`, { method: "POST", json: { ...creds, friend: id } });
+      onAdded();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const link = typeof location === "undefined" ? "" : location.href;
+  return (
+    <div className="sheet-wrap" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add a friend">
+        <div className="sheet-head">
+          Add a friend
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <Icon name="close" />
+          </button>
+        </div>
+        <section>
+          <h3>Invite someone</h3>
+          <p className="sub">They open the link, make their figure, and sit down at your table.</p>
+          <div className="invite-row">
+            <input readOnly value={link} aria-label="Invite link" onFocus={(e) => e.currentTarget.select()} />
+            <button
+              className="ghost"
+              onClick={() => {
+                void navigator.clipboard?.writeText(link);
+                setCopied(true);
+              }}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </section>
+        <section>
+          <h3>Demo friends</h3>
+          <p className="sub">For trying Scene alone. Muse Spark plays them and they answer when you post, in their own voices.</p>
+          <div className="friend-list">
+            {list.map((f) => {
+              const here = members.some((m) => m.name === f.name);
+              return (
+                <div className="friend-row" key={f.id}>
+                  <div className="face">{SEED_FACE[f.id] && <img src={SEED_FACE[f.id]} alt="" />}</div>
+                  <div className="who">
+                    <b>{f.name}</b>
+                    <span>{f.persona.split(". ")[0]}.</span>
+                  </div>
+                  {here ? (
+                    <span className="here">At the table</span>
+                  ) : (
+                    <button className="ghost small" disabled={!!busy} onClick={() => void seat(f.id)}>
+                      {busy === f.id ? "Seating…" : "Seat"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {err && <p className="err">{err}</p>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -471,14 +553,14 @@ function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; on
           <button type="submit" disabled={!text.trim()}>
             Send
           </button>
-          <button type="button" className="ghost" onClick={() => setTyping(false)} aria-label="Hold to talk">
-            🎙
+          <button type="button" className="icon-btn" onClick={() => setTyping(false)} aria-label="Hold to talk instead">
+            <Icon name="mic" />
           </button>
         </form>
       ) : (
         <div className="talk-row">
-          <button className="ghost" onClick={() => setTyping(true)} aria-label="Keyboard">
-            ⌨︎
+          <button className="icon-btn" onClick={() => setTyping(true)} aria-label="Type instead">
+            <Icon name="keyboard" />
           </button>
           <button
             className={`talk ${recording ? "on" : ""}`}

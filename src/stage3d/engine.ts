@@ -10,12 +10,16 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import * as miniSet from "./set";
 
 export type Emotion = "neutral" | "happy" | "surprised" | "angry" | "sad" | "laughing";
 export type Gesture = "none" | "lean_in" | "step_back" | "shake" | "nod";
 export type Camera = "room" | "close";
 export type Pose = Emotion | "away";
 export type Look = "speaker" | "camera" | "down";
+
+/** What a listener's reaction looks like above their head (neutral and asleep show nothing). */
+const REACTION_EMOJI: Partial<Record<Pose, string>> = { laughing: "😂", surprised: "😮", angry: "💢", sad: "😢", happy: "😊" };
 
 export interface FigureAssets {
   [pose: string]: { glb?: string | null; img?: string | null } | undefined;
@@ -93,8 +97,9 @@ export interface PlayController {
 
 // ───────────────────────── look & feel ─────────────────────────
 
-const ROOM = "#d9d1c4";
-const INK = "#1b1815";
+const ROOM = "#0e0d0c"; // the UI's warm near-black, behind the set while it loads
+const INK = "#111111";
+const LAMP = "#f2b33d"; // the one data hue: who is speaking
 const FIG_H = 0.8; // a seated figure on its stool, floor to the top of the head
 const PIVOT_Y = 0.2; // the stool top: figures lean and nod around it
 const TABLE_Y = 0.34; // table top
@@ -103,9 +108,6 @@ const CENTER = new THREE.Vector3(0, TABLE_Y, 0);
 const ENV_FPS = 30;
 const FPS = 12; // stop motion: a new picture twelve times a second (animated "on twos")
 const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b"];
-const ROOM_R = 2.3; // the miniature dining room around the table
-const WALL_H = 1.8;
-const WAINSCOT_H = 0.5;
 
 /**
  * Seats around a round table for the viewer plus `others` people. The viewer keeps a little elbow room
@@ -122,17 +124,27 @@ function seatRing(others: number) {
 }
 
 const CSS = `
-.s3-root{position:relative;width:100%;height:100%;min-height:360px;overflow:hidden;background:${ROOM};font-family:"Hanken Grotesk",ui-sans-serif,system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;color:${INK};user-select:none;-webkit-user-select:none}
+.s3-root{position:relative;width:100%;height:100%;min-height:360px;overflow:hidden;background:${ROOM};font-family:var(--font-sans,"Inter"),"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;color:${INK};user-select:none;-webkit-user-select:none}
 .s3-root canvas{display:block;width:100%!important;height:100%!important}
-.s3-cap{position:absolute;left:14px;right:14px;bottom:14px;background:#fff;padding:12px 14px 13px;transition:opacity .25s ease,transform .25s ease}
+.s3-cap{position:absolute;right:14px;bottom:14px;max-width:min(78%,420px);background:#fff;color:${INK};border-radius:20px 20px 6px 20px;padding:10px 15px 11px;transition:opacity .25s ease,transform .25s ease}
 .s3-cap.hidden{opacity:0;transform:translateY(8px)}
-.s3-cap .who{font-size:13px;font-weight:600;color:#6b6259}
-.s3-cap .line{font-size:clamp(19px,4.4vw,26px);line-height:1.22;font-weight:700;letter-spacing:-.01em;margin-top:2px}
-.s3-cap .flag{font-size:12px;color:#8a5a00;margin-top:4px}
-.s3-mark{position:absolute;top:10px;right:12px;font-size:11px;color:#6b6259}
-.s3-name{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:600;color:${INK};background:#fff;padding:2px 7px 3px;white-space:nowrap;pointer-events:none;transition:opacity .3s}
-.s3-name.away{color:#8a8077}
-@media (prefers-reduced-motion:reduce){.s3-cap{transition:none}}
+.s3-cap .who{display:none}
+.s3-cap .line{font-size:18px;line-height:1.3;font-weight:500}
+.s3-cap .flag{font-size:12px;color:#5f5a52;margin-top:3px}
+.s3-mark{position:absolute;top:10px;right:12px;font-size:11px;color:#949494}
+.s3-name{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:500;color:#b4b4b4;background:#111;border-radius:999px;padding:3px 9px 4px;white-space:nowrap;pointer-events:none;transition:opacity .3s,color .2s}
+.s3-name.away{color:#949494}
+.s3-name.talking{color:${LAMP}}
+.s3-bubble{position:absolute;left:0;top:0;transform:translate(-50%,-100%);width:max-content;max-width:min(64%,300px);background:#fff;color:${INK};border-radius:18px;padding:9px 14px 10px;font-size:17px;line-height:1.3;font-weight:500;pointer-events:none;opacity:0;transition:opacity .2s ease;overflow-wrap:anywhere}
+.s3-bubble::after{content:"";position:absolute;left:var(--tail,50%);bottom:-7px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:#fff}
+.s3-bubble.on{opacity:1}
+.s3-bubble.old{opacity:.0}
+.s3-bubble .flag{display:block;font-size:12px;color:#5f5a52;margin-top:2px}
+.s3-bubble.emoji{background:none;padding:0;font-size:46px;line-height:1}
+.s3-bubble.emoji::after{display:none}
+.s3-react{position:absolute;left:0;top:0;transform:translate(-50%,-100%) scale(.6);font-size:30px;line-height:1;pointer-events:none;opacity:0;transition:opacity .15s,transform .2s cubic-bezier(.2,1.6,.4,1)}
+.s3-react.on{opacity:1;transform:translate(-50%,-100%) scale(1)}
+@media (prefers-reduced-motion:reduce){.s3-cap,.s3-bubble,.s3-react{transition:none}}
 `;
 
 let cssDone = false;
@@ -145,194 +157,13 @@ function injectCss(doc: Document) {
   cssDone = true;
 }
 
-function woodTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = c.height = 1024;
-  const g = c.getContext("2d")!;
-  g.fillStyle = "#7e4f2b";
-  g.fillRect(0, 0, 1024, 1024);
-  for (let p = 0; p < 6; p++) {
-    const x0 = (p * 1024) / 6;
-    g.fillStyle = `rgba(${90 + p * 7},${55 + p * 4},${28},${0.08 + (p % 2) * 0.05})`;
-    g.fillRect(x0, 0, 1024 / 6, 1024);
-    g.fillStyle = "rgba(60,35,18,.35)";
-    g.fillRect(x0, 0, 2, 1024);
-  }
-  for (let i = 0; i < 700; i++) {
-    const x = Math.random() * 1024;
-    g.strokeStyle = `rgba(70,40,18,${0.04 + Math.random() * 0.08})`;
-    g.lineWidth = 0.6 + Math.random() * 1.6;
-    g.beginPath();
-    g.moveTo(x, 0);
-    for (let y = 0; y <= 1024; y += 32) g.lineTo(x + Math.sin(y / 90 + i) * 4, y);
-    g.stroke();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
 
-function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void, repeat?: [number, number]): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  draw(c.getContext("2d")!);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  if (repeat) {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(repeat[0], repeat[1]);
-  }
-  return t;
-}
 
-/** Specks of grit and paper fibre, so surfaces read as made things. */
-function speckle(g: CanvasRenderingContext2D, w: number, h: number, n: number, light = false) {
-  for (let i = 0; i < n; i++) {
-    g.fillStyle = light ? `rgba(255,240,210,${Math.random() * 0.08})` : `rgba(30,15,5,${Math.random() * 0.1})`;
-    g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2);
-  }
-}
 
-/** Mustard stripe wallpaper with a small diamond, printed slightly off-register. */
-function wallpaperTexture(repeat: [number, number]) {
-  return canvasTex(256, 256, (g) => {
-    g.fillStyle = "#bd8c3c";
-    g.fillRect(0, 0, 256, 256);
-    for (let x = 0; x < 256; x += 64) {
-      g.fillStyle = "#ad7c31";
-      g.fillRect(x + 32, 0, 32, 256);
-      g.fillStyle = "rgba(236,200,130,.35)";
-      g.fillRect(x + 31, 0, 1.5, 256);
-      for (let y = 16; y < 256; y += 64) {
-        const cx = x + 48 + (Math.random() - 0.5), cy = y + (Math.random() - 0.5);
-        g.fillStyle = "#8a5f22";
-        g.beginPath();
-        g.moveTo(cx, cy - 7);
-        g.lineTo(cx + 5, cy);
-        g.lineTo(cx, cy + 7);
-        g.lineTo(cx - 5, cy);
-        g.fill();
-        g.fillStyle = "#d9ae62";
-        g.fillRect(cx - 1, cy + 30, 2, 2);
-      }
-    }
-    speckle(g, 256, 256, 900);
-    speckle(g, 256, 256, 300, true);
-  }, repeat);
-}
 
-/** Dark walnut boards for the lower wall. */
-function wainscotTexture(repeat: [number, number]) {
-  return canvasTex(256, 128, (g) => {
-    g.fillStyle = "#4e301d";
-    g.fillRect(0, 0, 256, 128);
-    for (let x = 0; x < 256; x += 32) {
-      g.fillStyle = `rgba(${70 + Math.random() * 20},${42 + Math.random() * 10},24,.5)`;
-      g.fillRect(x + 2, 0, 28, 128);
-      g.fillStyle = "rgba(20,10,4,.7)";
-      g.fillRect(x, 0, 2, 128);
-      g.fillStyle = "rgba(200,150,100,.12)";
-      g.fillRect(x + 2, 0, 1, 128);
-    }
-    speckle(g, 256, 128, 500);
-  }, repeat);
-}
 
-/** Floorboards. */
-function floorTexture(repeat: [number, number]) {
-  return canvasTex(512, 512, (g) => {
-    g.fillStyle = "#5e3b23";
-    g.fillRect(0, 0, 512, 512);
-    for (let y = 0; y < 512; y += 48) {
-      let x = -Math.random() * 200;
-      while (x < 512) {
-        const len = 160 + Math.random() * 220;
-        g.fillStyle = `rgb(${88 + Math.random() * 22},${56 + Math.random() * 14},${32 + Math.random() * 8})`;
-        g.fillRect(x + 1, y + 1, len - 2, 46);
-        g.strokeStyle = "rgba(40,22,10,.25)";
-        for (let k = 0; k < 4; k++) {
-          g.beginPath();
-          const yy = y + 6 + Math.random() * 36;
-          g.moveTo(x, yy);
-          g.bezierCurveTo(x + len / 3, yy + 3, x + (2 * len) / 3, yy - 3, x + len, yy);
-          g.stroke();
-        }
-        x += len;
-      }
-      g.fillStyle = "rgba(20,10,4,.8)";
-      g.fillRect(0, y, 512, 2);
-    }
-    speckle(g, 512, 512, 1500);
-  }, repeat);
-}
 
-/** A round rug: rust field, ochre and umber bands, a ring of diamonds. */
-function rugTexture() {
-  return canvasTex(512, 512, (g) => {
-    const c = 256;
-    const ring = (r: number, col: string) => {
-      g.fillStyle = col;
-      g.beginPath();
-      g.arc(c, c, r, 0, Math.PI * 2);
-      g.fill();
-    };
-    ring(256, "#3a2418");
-    ring(244, "#c49a45");
-    ring(226, "#7e3220");
-    ring(206, "#3a2418");
-    ring(198, "#8f3d24");
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      const x = c + Math.cos(a) * 216, y = c + Math.sin(a) * 216;
-      g.fillStyle = "#d8b25e";
-      g.beginPath();
-      g.moveTo(x, y - 6);
-      g.lineTo(x + 5, y);
-      g.lineTo(x, y + 6);
-      g.lineTo(x - 5, y);
-      g.fill();
-    }
-    ring(120, "#a5512e");
-    ring(110, "#8f3d24");
-    // woven texture
-    for (let y = 0; y < 512; y += 3) {
-      g.fillStyle = `rgba(0,0,0,${0.03 + Math.random() * 0.04})`;
-      g.fillRect(0, y, 512, 1);
-    }
-    speckle(g, 512, 512, 2500);
-    speckle(g, 512, 512, 800, true);
-  });
-}
 
-/** Night sky through the window: deep blue, a few stars, a pale moon. */
-function nightTexture() {
-  return canvasTex(256, 320, (g) => {
-    const grd = g.createLinearGradient(0, 0, 0, 320);
-    grd.addColorStop(0, "#101a33");
-    grd.addColorStop(1, "#2c4569");
-    g.fillStyle = grd;
-    g.fillRect(0, 0, 256, 320);
-    for (let i = 0; i < 40; i++) {
-      g.fillStyle = `rgba(255,245,220,${0.3 + Math.random() * 0.5})`;
-      g.fillRect(Math.random() * 256, Math.random() * 200, 1.5, 1.5);
-    }
-    g.fillStyle = "#f3e7c4";
-    g.beginPath();
-    g.arc(180, 70, 18, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = "#1a2a48";
-    g.fillRect(0, 250, 256, 70); // a hedge line
-    g.fillStyle = "#16233c";
-    for (let x = 0; x < 256; x += 22) {
-      g.beginPath();
-      g.arc(x + 11, 252, 16, Math.PI, 0);
-      g.fill();
-    }
-  });
-}
 
 const POSE_FALLBACK: Record<Pose, Pose[]> = {
   neutral: [],
@@ -373,6 +204,8 @@ interface Figure {
   dim: number;
   targetDim: number;
   label: HTMLDivElement;
+  bubble: HTMLDivElement; // what they are saying, above their head
+  react: HTMLDivElement; // a listener's reaction, above their head
   materials: { m: THREE.MeshStandardMaterial; base: THREE.Color }[];
   k: number | null; // world units per image pixel, from the neutral cut-out
 }
@@ -454,6 +287,51 @@ interface Cut {
   h: number;
   top: number;
   bottom: number;
+  /** Clay relief: the silhouette inflated into a pillow, gw × gh heights 0..1 over the whole image. */
+  relief: { hf: Float32Array; gw: number; gh: number } | null;
+}
+
+const RELIEF_GRID = 88;
+const RELIEF_DEPTH = 0.075; // world units at the thickest point, for a figure about 0.8 tall
+
+/**
+ * Inflate a silhouette like a lump of clay: distance from the edge (two-pass chamfer), rounded over a radius,
+ * so edges curve away from the light and the middle stays full.
+ */
+function inflate(inside: Uint8Array, gw: number, gh: number): Float32Array {
+  const INF = 1e6;
+  const d = new Float32Array(gw * gh);
+  for (let i = 0; i < d.length; i++) d[i] = inside[i] ? INF : 0;
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= gw || y >= gh ? 0 : d[y * gw + x]);
+  for (let y = 0; y < gh; y++)
+    for (let x = 0; x < gw; x++) {
+      const i = y * gw + x;
+      if (d[i]) d[i] = Math.min(d[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + 1.414, at(x + 1, y - 1) + 1.414);
+    }
+  for (let y = gh - 1; y >= 0; y--)
+    for (let x = gw - 1; x >= 0; x--) {
+      const i = y * gw + x;
+      if (d[i]) d[i] = Math.min(d[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + 1.414, at(x - 1, y + 1) + 1.414);
+    }
+  const R = gw * 0.085;
+  const hf = new Float32Array(gw * gh);
+  for (let i = 0; i < hf.length; i++) {
+    const t = Math.min(1, d[i] / R);
+    hf[i] = d[i] ? Math.sqrt(1 - (1 - t) * (1 - t)) : 0;
+  }
+  // one box blur so cell steps do not show in the lamp light
+  const out = new Float32Array(hf.length);
+  for (let y = 0; y < gh; y++)
+    for (let x = 0; x < gw; x++) {
+      let sum = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx >= 0 && yy >= 0 && xx < gw && yy < gh) (sum += hf[yy * gw + xx]), n++;
+        }
+      out[y * gw + x] = inside[y * gw + x] ? sum / n : 0;
+    }
+  return out;
 }
 const cutCache = new Map<string, Promise<Cut>>();
 
@@ -466,6 +344,7 @@ function loadCut(url: string): Promise<Cut> {
         const img = tex.image as HTMLImageElement;
         const w = img.width, h = img.height;
         let top = 0, bottom = h - 1;
+        let relief: Cut["relief"] = null;
         try {
           // find the subject's first and last rows on a quarter-size copy
           const cw = Math.max(1, Math.round(w / 4)), ch = Math.max(1, Math.round(h / 4));
@@ -487,10 +366,19 @@ function loadCut(url: string): Promise<Cut> {
             top = (t / ch) * h;
             bottom = ((b + 1) / ch) * h;
           }
+          const gw = RELIEF_GRID, gh = Math.max(2, Math.round((RELIEF_GRID * h) / w));
+          g.clearRect(0, 0, cw, ch);
+          c.width = gw;
+          c.height = gh;
+          g.drawImage(img, 0, 0, gw, gh);
+          const a = g.getImageData(0, 0, gw, gh).data;
+          const inside = new Uint8Array(gw * gh);
+          for (let i = 0; i < inside.length; i++) inside[i] = a[i * 4 + 3] > 127 ? 1 : 0;
+          relief = { hf: inflate(inside, gw, gh), gw, gh };
         } catch {
           /* tainted or no canvas: use the whole image */
         }
-        return { tex, w, h, top, bottom };
+        return { tex, w, h, top, bottom, relief };
       }),
     );
   }
@@ -500,7 +388,14 @@ function loadCut(url: string): Promise<Cut> {
 /** Stand a cut-out up as a card, `k` world units per image pixel, the subject's feet on y=0. */
 function makeCard(cut: Cut, k: number): THREE.Object3D {
   const w = cut.w * k, h = cut.h * k;
-  const geo = new THREE.PlaneGeometry(w, h);
+  const r = cut.relief;
+  const geo = r ? new THREE.PlaneGeometry(w, h, r.gw - 1, r.gh - 1) : new THREE.PlaneGeometry(w, h);
+  if (r) {
+    // push each vertex out by the clay relief (rows run top to bottom, like the image)
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, r.hf[i] * RELIEF_DEPTH);
+    geo.computeVertexNormals();
+  }
   geo.translate(0, cut.bottom * k - h / 2, 0);
   const mat = new THREE.MeshStandardMaterial({ map: cut.tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 });
   const mesh = new THREE.Mesh(geo, mat);
@@ -615,12 +510,16 @@ export class Stage {
   private audioCtx: AudioContext | null = null;
   private current: { cancelled: boolean; skip: boolean; speed: number } | null = null;
   private focus: Figure | null = null;
+  private lineSeq = 0;
+  private idleLook = { at: 0, i: -1 }; // portrait phones: the idle camera looks from friend to friend
   private lastStep = 0;
   private step = 0;
   private lamp: THREE.SpotLight | null = null;
   private composer: EffectComposer | null = null;
   private bokeh: CutoutBokehPass | null = null;
   private lampBase = 1;
+  private roomFlicker: miniSet.SetLights["flicker"] = [];
+  private tableFlicker: miniSet.SetLights["flicker"] = [];
   private ro: ResizeObserver;
   private disposed = false;
 
@@ -672,103 +571,23 @@ export class Stage {
   /** A miniature dining room: wallpaper over walnut boards, floorboards, a window onto the night, a pendant lamp. */
   private buildRoom() {
     const sc = this.scene;
-    sc.background = new THREE.Color("#21160e");
-    sc.fog = new THREE.Fog("#21160e", 3.4, 8);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     sc.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    sc.environmentIntensity = 0.18;
-
-    const circ = 2 * Math.PI * ROOM_R;
-    const paper = new THREE.Mesh(
-      new THREE.CylinderGeometry(ROOM_R, ROOM_R, WALL_H - WAINSCOT_H, 96, 1, true),
-      new THREE.MeshStandardMaterial({ map: wallpaperTexture([circ / 0.32, (WALL_H - WAINSCOT_H) / 0.32]), roughness: 0.95, side: THREE.BackSide }),
-    );
-    paper.position.y = WAINSCOT_H + (WALL_H - WAINSCOT_H) / 2;
-    paper.receiveShadow = true;
-    const boards = new THREE.Mesh(
-      new THREE.CylinderGeometry(ROOM_R, ROOM_R, WAINSCOT_H, 96, 1, true),
-      new THREE.MeshStandardMaterial({ map: wainscotTexture([circ / 0.5, 1]), roughness: 0.7, side: THREE.BackSide }),
-    );
-    boards.position.y = WAINSCOT_H / 2;
-    const rail = new THREE.Mesh(new THREE.TorusGeometry(ROOM_R - 0.012, 0.014, 6, 128), new THREE.MeshStandardMaterial({ color: "#3a2416", roughness: 0.6 }));
-    rail.rotation.x = Math.PI / 2;
-    rail.position.y = WAINSCOT_H;
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(ROOM_R, 96), new THREE.MeshStandardMaterial({ map: floorTexture([3, 3]), roughness: 0.8 }));
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    const ceiling = new THREE.Mesh(new THREE.CircleGeometry(ROOM_R, 64), new THREE.MeshStandardMaterial({ color: "#3b2a1c", roughness: 1 }));
-    ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.y = WALL_H;
-    sc.add(paper, boards, rail, floor, ceiling);
-
-    // a window onto the night, behind the far left of the table
-    const win = new THREE.Group();
-    const a = Math.PI + 0.42;
-    win.position.set(Math.sin(a) * (ROOM_R - 0.03), 0.98, Math.cos(a) * (ROOM_R - 0.03));
-    win.lookAt(0, 0.98, 0);
-    const cream = new THREE.MeshStandardMaterial({ color: "#e6d6b4", roughness: 0.6 });
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.84, 0.04), cream);
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.74), new THREE.MeshBasicMaterial({ map: nightTexture(), fog: false }));
-    glass.position.z = 0.021;
-    const mullionV = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.74, 0.03), cream);
-    const mullionH = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.03, 0.03), cream);
-    mullionV.position.z = mullionH.position.z = 0.03;
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.035, 0.1), cream);
-    sill.position.set(0, -0.43, 0.04);
-    win.add(frame, glass, mullionV, mullionH, sill);
-    sc.add(win);
-    const moon = new THREE.DirectionalLight("#8fa8e8", 0.55);
-    moon.position.copy(win.position).setY(1.3);
-    sc.add(moon);
-
-    // pendant lamp over the table: the key light, warm, pooling on the tabletop
-    const lampY = 1.05;
-    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, WALL_H - lampY, 6), new THREE.MeshStandardMaterial({ color: "#1d140e" }));
-    cord.position.y = lampY + (WALL_H - lampY) / 2;
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.13, 40, 1, true), new THREE.MeshStandardMaterial({ color: "#2e4a3b", roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide }));
-    shade.position.y = lampY;
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.165, 0.125, 40, 1, true), new THREE.MeshBasicMaterial({ color: "#f6dfa8", side: THREE.BackSide }));
-    inner.position.y = lampY - 0.002;
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), new THREE.MeshBasicMaterial({ color: "#fff3d0" }));
-    bulb.position.y = lampY - 0.05;
-    sc.add(cord, shade, inner, bulb);
-    const lamp = new THREE.SpotLight("#ffcb85", 4.4, 0, 0.98, 0.85, 1.6);
-    lamp.position.set(0, lampY - 0.06, 0);
-    lamp.target.position.set(0, 0, 0);
-    lamp.castShadow = true;
-    lamp.shadow.mapSize.set(1024, 1024);
-    lamp.shadow.bias = -0.0006;
-    lamp.shadow.radius = 4;
-    sc.add(lamp, lamp.target);
-    this.lamp = lamp;
-    this.lampBase = lamp.intensity;
-    // soft fill from behind the viewer, and the room's bounce light
-    const fill = new THREE.DirectionalLight("#ffdcb4", 0.6);
-    fill.position.set(0.5, 1.3, 2.6);
-    sc.add(fill);
-    sc.add(new THREE.HemisphereLight("#ffd9a6", "#3b2618", 0.28));
+    sc.environmentIntensity = 0.16;
+    const lights = miniSet.buildRoom(sc);
+    this.lamp = lights.lamp;
+    this.lampBase = lights.lamp.intensity;
+    this.roomFlicker = lights.flicker;
   }
 
+  /** The table, laid for everyone at it (cake, teapot, a place at each seat including yours). */
   private buildTable() {
     this.table.clear();
-    const { rTable } = this.ring;
-    const wood = new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.62, metalness: 0 });
-    const edge = new THREE.MeshStandardMaterial({ color: "#8a5d35", roughness: 0.6 });
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(rTable, rTable, 0.035, 96), [edge, wood, edge]);
-    top.position.y = TABLE_Y - 0.0175;
-    top.receiveShadow = true;
-    top.castShadow = true;
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, TABLE_Y - 0.035, 24), edge);
-    leg.position.y = (TABLE_Y - 0.035) / 2;
-    leg.castShadow = true;
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.02, 48), edge);
-    foot.position.y = 0.01;
-    foot.receiveShadow = true;
-    const rug = new THREE.Mesh(new THREE.CircleGeometry(this.ring.rSeat + 0.42, 96), new THREE.MeshStandardMaterial({ map: rugTexture(), roughness: 1 }));
-    rug.rotation.x = -Math.PI / 2;
-    rug.position.y = 0.004;
-    rug.receiveShadow = true;
-    this.table.add(top, leg, foot, rug);
+    const { rTable, rSeat, angles } = this.ring;
+    const seats = angles.map((a) => new THREE.Vector3(Math.sin(-a) * rSeat, 0, Math.cos(-a) * rSeat));
+    const t = miniSet.buildTable(rTable, rSeat, seats, new THREE.Vector3(0, 0, rSeat), TABLE_Y);
+    this.table.add(t.group);
+    this.tableFlicker = t.flicker;
   }
 
   private resize() {
@@ -818,6 +637,8 @@ export class Stage {
     for (const f of this.figures.values()) {
       this.scene.remove(f.group);
       f.label.remove();
+      f.bubble.remove();
+      f.react.remove();
     }
     this.figures.clear();
     this.focus = null;
@@ -852,6 +673,11 @@ export class Stage {
     label.className = "s3-name";
     label.textContent = member.name;
     this.root.appendChild(label);
+    const bubble = document.createElement("div");
+    bubble.className = "s3-bubble";
+    const react = document.createElement("div");
+    react.className = "s3-react";
+    this.root.append(bubble, react);
     const f: Figure = {
       member,
       group,
@@ -879,6 +705,8 @@ export class Stage {
       dim: member.present ? 0 : 1,
       targetDim: member.present ? 0 : 1,
       label,
+      bubble,
+      react,
       materials: [],
       k: null,
     };
@@ -1062,6 +890,7 @@ export class Stage {
     this.lastStep = now;
     const s = ++this.step;
     const dt = 1 / FPS;
+    this.lookAround(now);
     this.sampleMove(now);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
@@ -1071,6 +900,7 @@ export class Stage {
     this.camera.lookAt(this.look);
     // set lights drift a hair between exposures
     if (this.lamp) this.lamp.intensity = this.lampBase * (1 + (Math.random() - 0.5) * 0.035);
+    for (const fl of [...this.roomFlicker, ...this.tableFlicker]) fl.light.intensity = fl.base * (1 + (Math.random() - 0.5) * fl.amount);
     const w = this.root.clientWidth, h = this.root.clientHeight;
     const v = new THREE.Vector3();
     const { rSeat, rTable } = this.ring;
@@ -1102,10 +932,12 @@ export class Stage {
       if (f.gesture === "lean_in") tiltX += 0.12;
       if (f.gesture === "step_back") tiltX -= 0.07;
       f.tilt.rotation.set(tiltX, wig, f.boil.r);
-      // flat cut-outs always face the viewer (a mesh turns for real)
+      // cut-outs mostly face the viewer but keep a quarter of the body's turn, so the clay relief shows its side
       if (f.cards.size) {
-        const toCam = this.yawTo(f.seat, this.camPos) - f.yaw;
-        for (const o of f.cards) o.rotation.y = toCam;
+        let toCam = this.yawTo(f.seat, this.camPos) - f.yaw;
+        while (toCam > Math.PI) toCam -= 2 * Math.PI;
+        while (toCam < -Math.PI) toCam += 2 * Math.PI;
+        for (const o of f.cards) o.rotation.y = toCam * 0.72;
       }
       f.dim += (f.targetDim - f.dim) * 0.4;
       // asleep: pulled in to the table, slumped over its edge
@@ -1118,7 +950,18 @@ export class Stage {
       f.label.style.left = `${((v.x + 1) / 2) * w}px`;
       f.label.style.top = `${((1 - v.y) / 2) * h}px`;
       f.label.classList.toggle("away", asleep);
+      f.label.classList.toggle("talking", f.speaking);
       f.label.style.opacity = onScreen ? "1" : "0";
+      // the speech bubble and the reaction ride just above the head, kept inside the frame
+      v.copy(f.group.position).setY(FIG_H * (asleep ? 0.62 : 0.98) + 0.03).project(this.camera);
+      const hx = ((v.x + 1) / 2) * w, hy = ((1 - v.y) / 2) * h;
+      const bw = f.bubble.offsetWidth || 120;
+      const bx = Math.min(w - 12 - bw / 2, Math.max(12 + bw / 2, hx));
+      f.bubble.style.left = `${bx}px`;
+      f.bubble.style.top = `${Math.max(f.bubble.offsetHeight + 60, hy)}px`; // clear of the controls along the top
+      f.bubble.style.setProperty("--tail", `${Math.min(bw - 18, Math.max(18, bw / 2 + hx - bx))}px`);
+      f.react.style.left = `${hx}px`;
+      f.react.style.top = `${Math.max(40, hy)}px`;
     }
     if (this.composer && this.bokeh) {
       // focus on whatever the viewer is looking at (the speaker, or the far side of the table)
@@ -1173,16 +1016,62 @@ export class Stage {
 
   // ───────── caption & camera ─────────
 
+  /**
+   * A friend's line goes in a bubble above their head (an emoji-only line is the emoji itself, large);
+   * your own line sits at the bottom of the screen, where you said it.
+   */
   private showCaption(item: PerformItem) {
-    const who = item.memberId === this.viewerId ? "You" : this.members.find((m) => m.id === item.memberId)?.name ?? "";
-    (this.caption.querySelector(".who") as HTMLElement).textContent = who;
-    (this.caption.querySelector(".line") as HTMLElement).textContent = item.text;
-    (this.caption.querySelector(".flag") as HTMLElement).textContent =
-      this.quiet || item.status !== "captions_only" ? "" : item.flags?.includes("voice_disabled") ? "Captions only" : "Voice did not pass the read-back check. Captions only.";
-    this.caption.classList.remove("hidden");
+    const flag = this.quiet || item.status !== "captions_only" ? "" : item.flags?.includes("voice_disabled") ? "Captions only" : "Voice failed the read-back check · captions only";
+    for (const o of this.figures.values()) o.bubble.classList.remove("on");
+    const f = item.memberId === this.viewerId ? null : this.figures.get(item.memberId);
+    if (!f) {
+      (this.caption.querySelector(".line") as HTMLElement).textContent = item.text;
+      (this.caption.querySelector(".flag") as HTMLElement).textContent = flag;
+      this.caption.classList.remove("hidden");
+      return;
+    }
+    this.caption.classList.add("hidden");
+    const emojiOnly = /^[\p{Extended_Pictographic}\p{Emoji_Component}\u200d\ufe0f\s]+$/u.test(item.text) && [...item.text.trim()].length <= 8;
+    f.bubble.classList.toggle("emoji", emojiOnly);
+    f.bubble.textContent = item.text;
+    if (flag && !emojiOnly) {
+      const s = document.createElement("span");
+      s.className = "flag";
+      s.textContent = flag;
+      f.bubble.appendChild(s);
+    }
+    f.bubble.classList.add("on");
   }
   hideCaption() {
     this.caption.classList.add("hidden");
+    for (const o of this.figures.values()) {
+      o.bubble.classList.remove("on");
+      o.react.classList.remove("on");
+    }
+  }
+
+  /** A listener's reaction as one emoji above their head, for the length of the line. */
+  private showReaction(o: Figure, pose: Pose | null) {
+    const e = pose ? REACTION_EMOJI[pose] : undefined;
+    o.react.textContent = e ?? "";
+    o.react.classList.toggle("on", !!e);
+  }
+
+  /**
+   * A phone held upright sees one friend at a time, so while nobody is talking the camera drifts from one
+   * friend to the next and back to the middle, the way you would look around a table.
+   */
+  private lookAround(now: number) {
+    if (this.current || !this.portrait() || this.figures.size < 2) {
+      this.idleLook.at = now;
+      return;
+    }
+    if (now - this.idleLook.at < 4200) return;
+    this.idleLook.at = now;
+    const list = [...this.figures.values()].filter((f) => f.dim < 0.5); // let sleepers sleep
+    if (!list.length) return;
+    this.idleLook.i = (this.idleLook.i + 1) % list.length;
+    this.shot(list[this.idleLook.i], "room");
   }
 
   /** Where the viewer looks: across the table at rest, or turned toward the speaker. */
@@ -1259,6 +1148,7 @@ export class Stage {
   async perform(item: PerformItem, opts: { speed?: number; signal?: { cancelled: boolean; skip: boolean } } = {}): Promise<void> {
     const speed = opts.speed ?? 1;
     const signal = opts.signal ?? { cancelled: false, skip: false };
+    const seq = ++this.lineSeq;
     (window as any).__sceneLog ??= [];
     (window as any).__sceneLog.push({ t: Date.now(), id: item.messageId, member: item.memberId, status: item.status });
     // null when the viewer is the one talking: there is no figure, everyone looks at the camera
@@ -1280,6 +1170,7 @@ export class Stage {
     for (const o of others) {
       const r = reactions.get(o.member.id);
       const awake = o.member.present || !!r;
+      this.showReaction(o, r ? r.pose : null);
       if (r) {
         if (o.current === "away" && r.pose !== "away") this.stir(o);
         o.targetDim = 0;
@@ -1338,6 +1229,9 @@ export class Stage {
       if (!f.member.present) this.rest(f);
       else this.showPose(f, "neutral");
     }
+    for (const o of this.figures.values()) o.react.classList.remove("on");
+    // the bubble stays a moment after the line, unless the next line has already started
+    setTimeout(() => this.lineSeq === seq && this.hideCaption(), 2600 / speed);
     await new Promise((r) => setTimeout(r, 220 / speed));
   }
 

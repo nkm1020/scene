@@ -1,8 +1,8 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 
-const sans = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const sans = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Scene: your group chat, performed",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   openGraph: { title: "Scene", description: "Your group chat, performed by your friends' figurines, in their own voices.", images: ["/og.png"] },
   twitter: { card: "summary_large_image", title: "Scene", description: "Your group chat, performed by your friends' figurines, in their own voices.", images: ["/og.png"] },
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, themeColor: "#d9d1c4" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, themeColor: "#0e0d0c" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
