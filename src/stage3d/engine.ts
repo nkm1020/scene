@@ -517,6 +517,7 @@ export class Stage {
   private current: { cancelled: boolean; skip: boolean; speed: number } | null = null;
   private focus: Figure | null = null;
   private lineSeq = 0;
+  private lastSpeaker: Figure | null = null;
   private lastStep = 0;
   private lastRender = 0;
   private step = 0;
@@ -1114,6 +1115,11 @@ export class Stage {
       // one person across the table (the figure preview): look at them, closer
       const only = [...this.figures.values()][0];
       this.aim(new THREE.Vector3(only.seat.x, 0.48, only.seat.z), this.baseFov * 0.62, snap);
+    } else if (!f && portrait) {
+      // an upright phone sees one or two people: rest on whoever spoke last (or the first friend awake), not on a sleeper
+      const awake = [...this.figures.values()].filter((o) => o.member.present);
+      const who = this.lastSpeaker && this.lastSpeaker.member.present ? this.lastSpeaker : awake[0];
+      this.aim(who ? rest.clone().lerp(new THREE.Vector3(who.seat.x, 0.58, who.seat.z), 0.8) : rest, this.baseFov, snap);
     } else if (!f) {
       this.aim(rest, this.baseFov, snap);
     } else {
@@ -1185,6 +1191,7 @@ export class Stage {
     const f = item.memberId === this.viewerId ? null : this.figures.get(item.memberId) ?? null;
     const others = [...this.figures.values()].filter((x) => x !== f);
     if (f) {
+      this.lastSpeaker = f;
       if (f.current === "away") this.stir(f);
       f.speaking = true;
       f.breathe = false;
