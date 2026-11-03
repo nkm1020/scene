@@ -24,7 +24,8 @@ npm run demo -- --voice none  # seed room → personas → Spark director → va
 
 `npm run demo` runs the whole pipeline on the seed group chat ("wrong chat", 3 friends, 12 messages): Muse Image draws three personas, SAM 3.1 cuts them out, Muse Spark directs the missed segment and `validate_directions` checks it, then each line is synthesized and read back by Voice Transcribe. It writes a self-contained `out/replay.html` (open it in any browser, no network) and `out/receipt.json` (every call, tokens, dollars, latency).
 
-- `--voice none` skips speech synthesis (captions + typing sounds). Everything that uses a Meta model still runs.
+- `--voice none` skips speech synthesis (captions + typing sounds). Muse Image, SAM 3.1 and Spark still run; Voice Transcribe runs when voices are on (read-back of every line, enrollment check).
+- `--reuse-personas` uses the committed personas in `public/seed/` instead of drawing new ones.
 - With `TTS_URL`/`TTS_TOKEN` set (see [`tts/`](tts/)), lines are spoken by Qwen3-TTS and must pass the read-back check.
 - `--inject-text` is the validator test: it inserts a `text` field into Spark's first output. The validator rejects it (D4) and Spark redirects.
 
@@ -34,7 +35,9 @@ Prefer not to run anything? [`examples/demo-room/`](examples/demo-room/) has a p
 
 ```
 Enroll (once per person)
-  3 words ──▶ Muse Image (stylized bust, never photoreal) ──▶ SAM 3.1 "person" ──▶ alpha ──▶ persona.png
+  3 words ──▶ Muse Image (stylized bust, never photoreal) ──▶ SAM 3.1 "person" ──▶ alpha ──▶ persona.webp
+          └─▶ Muse Image edit of the same image: head bowed, eyes closed ──▶ SAM 3.1 ──▶ away pose
+              (presence is posture: friends who are not in the room sit dozing until they perform a line)
   read 3 sentences ──▶ Muse Voice Transcribe ──▶ matches the shown text ≥ 0.80? ──▶ voice reference stored
                                                   (consent proof + quality gate; otherwise nothing is stored)
 Send
