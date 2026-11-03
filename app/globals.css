@@ -79,3 +79,5 @@ table.rec{width:100%;border-collapse:collapse;font-size:13px}table.rec td,table.
 .home-hero{width:min(380px,100%);height:min(560px,62dvh);border-radius:30px;overflow:hidden;border:1px solid var(--line);box-shadow:0 0 70px rgba(58,168,255,.18);position:relative}
 .hero-stage{position:absolute;inset:0}.hero-stage>.sc-stage{position:absolute;inset:0;min-height:0}
 @media (max-width:820px){.home{padding-top:16px}.home-hero{height:52dvh}}
+.empty-room{position:absolute;z-index:30;left:50%;top:22%;transform:translateX(-50%);width:min(320px,86%);text-align:center;color:#c8d8ea;font-size:14px;line-height:1.5}
+.empty-room .primary{margin-top:6px}

@@ -175,9 +175,11 @@ def clone_prompt(eng, audio_bytes: bytes, ref_text, xvec_only: bool):
 
 
 def max_tokens(text: str) -> int:
-    # ~12.5 codec frames per second of speech. Generous cap that still stops a
-    # runaway (looping) generation.
-    return int(min(2048, 120 + 10 * len(text)))
+    # 12.5 codec frames per second of speech. Speech runs ~6 Korean syllables or ~15 English
+    # characters per second, so 5 frames (0.4 s) per character plus 8 s of headroom is generous
+    # and still stops a runaway (looping) generation early. Observed Nov 3: a 29-char line ran to
+    # 20.6 s under the old 10-frames-per-char cap; Scene's read-back check rejected it.
+    return int(min(2048, 100 + 5 * len(text)))
 
 
 def build_api(eng, token: str):

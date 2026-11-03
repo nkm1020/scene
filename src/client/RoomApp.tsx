@@ -58,6 +58,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   const [directorNote, setDirectorNote] = useState<string>("");
   const [settings, setSettings] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [progress, setProgress] = useState<{ i: number; n: number } | null>(null);
   const stageHost = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const liveQueue = useRef<PerformItem[]>([]);
@@ -204,7 +205,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       const byId = new Map(s.renders.map((r) => [r.message_id, r]));
       const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id)));
       setMode("replaying");
-      const ctl = stage.current.play(items, { speed });
+      const ctl = stage.current.play(items, { speed, onItem: (i) => setProgress({ i: i + 1, n: items.length }) });
       (window as any).__sceneCtl = ctl;
       await ctl.done;
       const maxSeq = Math.max(...s.messages.map((m) => m.seq));
@@ -214,9 +215,25 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       setDirectorNote(`Replay failed: ${e.message}`);
     } finally {
       setMode("idle");
+      setProgress(null);
       void pump();
     }
   };
+
+  // iOS/Safari: unlock audio on the first touch anywhere, so live lines can play later without a tap.
+  useEffect(() => {
+    if (!joined) return;
+    const unlock = () => {
+      stage.current?.unlockAudio();
+      try {
+        const a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");
+        void a.play().catch(() => void 0);
+      } catch {}
+      window.removeEventListener("pointerdown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock);
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, [joined]);
 
   if (error) return <div className="center-msg">Couldn&apos;t open this room: {error}</div>;
   if (!state) return <div className="center-msg">Opening the room…</div>;
@@ -267,7 +284,10 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         {mode === "directing" && <div className="director-note pulse">{directorNote}</div>}
         {mode === "replaying" && (
           <div className="replay-ctl">
-            <span className="director-note">{directorNote}</span>
+            <span className="director-note">
+              {progress ? `${progress.i}/${progress.n} · ` : ""}
+              {directorNote}
+            </span>
             <button
               className="ghost small"
               onClick={() => {
@@ -284,6 +304,20 @@ export default function RoomApp({ roomId }: { roomId: string }) {
           </div>
         )}
         {mode === "idle" && missed.length === 0 && directorNote && <div className="director-note fade">{directorNote}</div>}
+        {state.members.length <= 1 && (
+          <div className="empty-room">
+            <p>Your seat is the camera. Friends you invite will sit around this table.</p>
+            <button
+              className="primary"
+              onClick={() => {
+                void navigator.clipboard?.writeText(location.href);
+                setDirectorNote("Invite link copied");
+              }}
+            >
+              Copy invite link
+            </button>
+          </div>
+        )}
       </div>
       <Composer creds={creds} me={me} onSent={() => void 0} disabled={mode !== "idle"} />
       {settings && <Settings roomId={roomId} creds={creds} me={me} onClose={() => setSettings(false)} onChanged={() => void reload()} />}
