@@ -34,6 +34,18 @@ export function presetFor(key: string | null | undefined, language: "ko" | "en" 
   return p[language];
 }
 
+const EMOJI = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu;
+const KEEP_CAPS = new Set(["OK", "AM", "PM", "TV", "ID", "UK", "US", "AI"]);
+
+/** What the voice is asked to say: emoji removed (unspeakable), shouted words lowercased (not spelled out). */
+export function ttsText(text: string): string {
+  return text
+    .replace(EMOJI, "")
+    .replace(/\b[A-Z]{2,}\b/g, (w) => (KEEP_CAPS.has(w) ? w : w.toLowerCase()))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function synthesize(
   text: string,
   voice: Voice,
@@ -46,7 +58,7 @@ export async function synthesize(
   const res = await fetch(`${base}/tts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TTS_TOKEN ?? ""}` },
-    body: JSON.stringify({ text, language: opts.language ?? "auto", voice, ...(opts.seed != null ? { seed: opts.seed } : {}), ...(opts.speed ? { speed: opts.speed } : {}) }),
+    body: JSON.stringify({ text: ttsText(text), language: opts.language ?? "auto", voice, ...(opts.seed != null ? { seed: opts.seed } : {}), ...(opts.speed ? { speed: opts.speed } : {}) }),
     signal: AbortSignal.timeout(180_000),
   });
   const ms = Math.round(performance.now() - t0);

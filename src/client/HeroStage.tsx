@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createStage, type PerformItem } from "@/stage/engine";
 import { SEED_MEMBERS, SEED_MESSAGES } from "@/core/seed";
-import { ruleDirections } from "@/core/director";
+import { ruleDirections } from "@/core/rules";
 import { isSilent } from "@/core/text";
 
 export default function HeroStage() {

@@ -267,7 +267,16 @@ def build_api(eng, token: str):
             raise HTTPException(400, "seed must be an int")
 
         headers = {}
-        gen_kwargs = {"max_new_tokens": max_tokens(text)}
+        # Lower-than-default sampling temperature (package default 0.9): fewer hallucinated words before the line.
+        # Scene reads every clip back anyway; this just makes the first attempt pass more often.
+        try:
+            temperature = float(body.get("temperature", 0.65))
+            top_p = float(body.get("top_p", 0.85))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "temperature/top_p must be numbers")
+        if not (0.1 <= temperature <= 1.5 and 0.1 <= top_p <= 1.0):
+            raise HTTPException(400, "temperature in [0.1,1.5], top_p in [0.1,1.0]")
+        gen_kwargs = {"max_new_tokens": max_tokens(text), "temperature": temperature, "top_p": top_p}
 
         if "preset" in voice:
             spk = str(voice["preset"]).lower()

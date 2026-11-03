@@ -57,3 +57,12 @@ describe("wav helpers", () => {
     expect(Math.max(...env)).toBe(1);
   });
 });
+
+import { ttsText } from "../src/core/tts";
+describe("tts input", () => {
+  it("drops emoji and lowercases shouted words", () => {
+    expect(ttsText("I'll bring the cake 🎂")).toBe("I'll bring the cake");
+    expect(ttsText("DO NOT tell Jay")).toBe("do not tell Jay");
+    expect(ttsText("ok Friday 7PM")).toBe("ok Friday 7PM");
+  });
+});
