@@ -2,6 +2,7 @@
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import type { PerformItem, StageMember } from "../stage3d/engine";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -51,7 +52,15 @@ export async function buildReplayHtml(payload: ReplayPayload): Promise<string> {
   const data = JSON.stringify({ ...payload, generatedAt: new Date().toISOString() }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Scene replay</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"><style>${PAGE_CSS}</style></head><body><div id="app"></div>
-<script>window.__SCENE__=${data};</script><script>${script}</script></body></html>`;
+<script>window.__SCENE__=${data};window.__SCENE_SET__=${setPictures()};</script><script>${script}</script></body></html>`;
+}
+
+/** The set's Muse Image pictures (walls, floor, tabletop, props), embedded so the replay page needs no server. */
+function setPictures(): string {
+  const dir = path.join(process.cwd(), "public", "set");
+  const out: Record<string, string> = {};
+  for (const f of existsSync(dir) ? readdirSync(dir) : []) if (f.endsWith(".webp")) out[f.slice(0, -5)] = dataUrl(readFileSync(path.join(dir, f)), "image/webp");
+  return JSON.stringify(out);
 }
 
 export function dataUrl(bytes: Buffer, mime: string): string {

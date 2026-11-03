@@ -386,14 +386,14 @@ function loadCut(url: string): Promise<Cut> {
 }
 
 /** Stand a cut-out up as a card, `k` world units per image pixel, the subject's feet on y=0. */
-function makeCard(cut: Cut, k: number): THREE.Object3D {
+function makeCard(cut: Cut, k: number, depth = RELIEF_DEPTH): THREE.Object3D {
   const w = cut.w * k, h = cut.h * k;
   const r = cut.relief;
   const geo = r ? new THREE.PlaneGeometry(w, h, r.gw - 1, r.gh - 1) : new THREE.PlaneGeometry(w, h);
   if (r) {
     // push each vertex out by the clay relief (rows run top to bottom, like the image)
     const pos = geo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) pos.setZ(i, r.hf[i] * RELIEF_DEPTH);
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, r.hf[i] * depth);
     geo.computeVertexNormals();
   }
   geo.translate(0, cut.bottom * k - h / 2, 0);
@@ -519,6 +519,8 @@ export class Stage {
   private bokeh: CutoutBokehPass | null = null;
   private lampBase = 1;
   private roomFlicker: miniSet.SetLights["flicker"] = [];
+  private props: THREE.Object3D[] = []; // cut-out props on the table, turned to the viewer like the figures
+  private tableToken = 0;
   private tableFlicker: miniSet.SetLights["flicker"] = [];
   private ro: ResizeObserver;
   private disposed = false;
@@ -583,11 +585,32 @@ export class Stage {
   /** The table, laid for everyone at it (cake, teapot, a place at each seat including yours). */
   private buildTable() {
     this.table.clear();
-    const { rTable, rSeat, angles } = this.ring;
-    const seats = angles.map((a) => new THREE.Vector3(Math.sin(-a) * rSeat, 0, Math.cos(-a) * rSeat));
-    const t = miniSet.buildTable(rTable, rSeat, seats, new THREE.Vector3(0, 0, rSeat), TABLE_Y);
+    this.props = [];
+    const { rTable, angles } = this.ring;
+    const t = miniSet.buildTable(rTable, TABLE_Y);
     this.table.add(t.group);
     this.tableFlicker = t.flicker;
+    // the props are Muse Image cut-outs like the figures: a cake in the middle, a teapot, a place at every seat
+    const seats = [...angles.map((a) => new THREE.Vector3(Math.sin(-a), 0, Math.cos(-a))), new THREE.Vector3(0, 0, 1)];
+    const place: [string, THREE.Vector3, number][] = [
+      ["cake", new THREE.Vector3(0, TABLE_Y, -0.03), 0.15],
+      ["teapot", new THREE.Vector3(-0.13, TABLE_Y, 0.02), 0.058],
+    ];
+    for (const d of seats) {
+      const side = new THREE.Vector3(-d.z, 0, d.x);
+      const at = d.clone().multiplyScalar(rTable - 0.085).setY(TABLE_Y);
+      place.push(["plate", at, 0.022], ["cup", at.clone().addScaledVector(side, 0.075).addScaledVector(d, -0.02), 0.042]);
+    }
+    const token = ++this.tableToken;
+    for (const [name, at, height] of place)
+      void loadCut(miniSet.setUrl(name)).then((cut) => {
+        if (token !== this.tableToken || this.disposed) return;
+        const card = makeCard(cut, height / Math.max(1, cut.bottom - cut.top), height * 0.12);
+        card.position.copy(at);
+        card.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.receiveShadow = true) : null));
+        this.table.add(card);
+        this.props.push(card);
+      });
   }
 
   private resize() {
@@ -891,6 +914,7 @@ export class Stage {
     const s = ++this.step;
     const dt = 1 / FPS;
     this.lookAround(now);
+    for (const p of this.props) p.rotation.y = Math.atan2(this.camPos.x - p.position.x, this.camPos.z - p.position.z);
     this.sampleMove(now);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
@@ -944,8 +968,8 @@ export class Stage {
       f.group.position.copy(f.seat).multiplyScalar(1 - (0.08 * f.dim * rTable) / rSeat);
       for (const { m, base } of f.materials) m.color.copy(base).multiplyScalar(1 - 0.3 * f.dim);
       this.showFrame(f, this.pickFrame(f));
-      // name card on the table edge in front of the seat
-      v.copy(f.seat).multiplyScalar((rTable - 0.05) / rSeat).setY(TABLE_Y + 0.01).project(this.camera);
+      // name card at the figure's own lap, so it can only ever sit on its own figure
+      v.copy(f.group.position).multiplyScalar(1 - 0.06 / rSeat).setY(TABLE_Y + 0.02).project(this.camera);
       const onScreen = v.z < 1 && v.x > -1.1 && v.x < 1.1;
       f.label.style.left = `${((v.x + 1) / 2) * w}px`;
       f.label.style.top = `${((1 - v.y) / 2) * h}px`;
