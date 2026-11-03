@@ -12,6 +12,8 @@ export interface StageMember {
   id: string;
   name: string;
   personaUrl: string | null;
+  /** Same persona with head bowed (Muse Image edit). Shown while the member is away. */
+  awayUrl?: string | null;
   present: boolean;
 }
 
@@ -156,7 +158,9 @@ export class Stage {
   setMembers(members: StageMember[]) {
     const prev = new Map(this.members.map((m) => [m.id, m]));
     this.members = members;
-    const sameSet = members.length === prev.size && members.every((m) => prev.has(m.id) && prev.get(m.id)!.personaUrl === m.personaUrl && prev.get(m.id)!.name === m.name);
+    const sameSet =
+      members.length === prev.size &&
+      members.every((m) => prev.has(m.id) && prev.get(m.id)!.personaUrl === m.personaUrl && (prev.get(m.id)!.awayUrl ?? null) === (m.awayUrl ?? null) && prev.get(m.id)!.name === m.name);
     if (!sameSet) this.layout();
     for (const m of members) this.setPresence(m.id, m.present);
   }
@@ -174,20 +178,27 @@ export class Stage {
       const y = TABLE_Y - TABLE_H * 0.5 * depth + 4; // feet just behind the rim (hidden by the table top)
       const s = 1 - 0.16 * depth;
       const el = document.createElement("div");
-      el.className = `sc-seat ${member.present ? "present" : "absent"}`;
+      el.className = `sc-seat ${member.present ? "present" : "absent"}${member.awayUrl ? " has-away" : ""}`;
       el.dataset.member = member.id;
       const url = member.personaUrl || DEFAULT_PERSONA;
       el.innerHTML = `<div class="sc-beam"></div><div class="sc-disc"></div>
         <div class="sc-persona sc-flicker"><div class="sc-pulse">
-          <div class="sc-layer body"><img class="sc-img" alt="" draggable="false"><div class="sc-scan"></div></div>
-          <div class="sc-layer head"><img class="sc-img" alt="" draggable="false"><div class="sc-scan"></div></div>
+          <div class="sc-pose here">
+            <div class="sc-layer body"><img class="sc-img" alt="" draggable="false"><div class="sc-scan"></div></div>
+            <div class="sc-layer head"><img class="sc-img" alt="" draggable="false"><div class="sc-scan"></div></div>
+          </div>
+          ${member.awayUrl ? `<div class="sc-pose away"><img class="sc-img" alt="" draggable="false"><div class="sc-scan"></div></div>` : ""}
         </div><div class="sc-emote"></div><div class="sc-dots">•••</div></div>
         <div class="sc-name"></div>`;
-      el.querySelectorAll<HTMLImageElement>("img").forEach((img) => (img.src = url));
-      el.querySelectorAll<HTMLDivElement>(".sc-scan").forEach((d) => {
-        d.style.maskImage = `url("${url}")`;
-        (d.style as any).webkitMaskImage = `url("${url}")`;
-      });
+      const setImg = (scope: Element, u: string) => {
+        scope.querySelectorAll<HTMLImageElement>("img").forEach((img) => (img.src = u));
+        scope.querySelectorAll<HTMLDivElement>(".sc-scan").forEach((d) => {
+          d.style.maskImage = `url("${u}")`;
+          (d.style as any).webkitMaskImage = `url("${u}")`;
+        });
+      };
+      setImg(el.querySelector(".sc-pose.here")!, url);
+      if (member.awayUrl) setImg(el.querySelector(".sc-pose.away")!, member.awayUrl);
       (el.querySelector(".sc-name") as HTMLDivElement).textContent = member.name;
       this.cam.appendChild(el);
       this.seats.set(member.id, {

@@ -10,7 +10,9 @@ export async function DELETE(req: Request) {
     if (what !== "voice" && member.persona_url) {
       const path = String(member.persona_url).split("/personas/")[1];
       if (path) await db().storage.from("personas").remove([decodeURIComponent(path)]);
-      await db().from("members").update({ persona_url: null, persona_spec: null }).eq("id", member.id);
+      const away = member.persona_away_url ? String(member.persona_away_url).split("/personas/")[1] : null;
+      if (away) await db().storage.from("personas").remove([decodeURIComponent(away)]);
+      await db().from("members").update({ persona_url: null, persona_away_url: null, persona_spec: null }).eq("id", member.id);
     }
     if (what !== "persona" && secrets.voice_path) {
       await db().storage.from("voices").remove([secrets.voice_path]);

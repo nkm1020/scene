@@ -7,7 +7,7 @@ export const ROOM_DAILY_MESSAGES = 200;
 export async function getRoomState(roomId: string) {
   const [{ data: room }, { data: members }, { data: messages }, { data: renders }] = await Promise.all([
     db().from("rooms").select("*").eq("id", roomId).maybeSingle(),
-    db().from("members").select("id, room_id, name, persona_url, enrolled_voice, preset, is_seed, created_at").eq("room_id", roomId).order("created_at"),
+    db().from("members").select("id, room_id, name, persona_url, persona_away_url, enrolled_voice, preset, is_seed, created_at").eq("room_id", roomId).order("created_at"),
     db().from("messages").select("id, room_id, member_id, seq, text, created_at").eq("room_id", roomId).order("seq", { ascending: false }).limit(200),
     db().from("renders").select("*").eq("room_id", roomId),
   ]);
@@ -24,7 +24,7 @@ export async function forkDemoRoom(): Promise<string> {
   // Batch inserts (3 round trips instead of ~30): rows come back in insertion order.
   const { data: newMembers, error: em } = await db()
     .from("members")
-    .insert(tpl.members.map((m: any) => ({ room_id: id, name: m.name, persona_url: m.persona_url, enrolled_voice: false, preset: m.preset, is_seed: true })))
+    .insert(tpl.members.map((m: any) => ({ room_id: id, name: m.name, persona_url: m.persona_url, persona_away_url: m.persona_away_url, enrolled_voice: false, preset: m.preset, is_seed: true })))
     .select("id");
   if (em) throw em;
   const idMap = new Map<string, string>(tpl.members.map((m: any, i: number) => [m.id, newMembers![i].id]));

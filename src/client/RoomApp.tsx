@@ -7,7 +7,7 @@ import { api, loadCreds, saveCreds, lastSeen, setLastSeen, type Creds } from "./
 import { Recorder } from "./audio";
 import { ENROLL_SENTENCES } from "@/core/seed";
 
-type Member = { id: string; room_id: string; name: string; persona_url: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
+type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
 type Message = { id: string; room_id: string; member_id: string; seq: number; text: string; created_at: string };
 type Render = {
   message_id: string;
@@ -57,6 +57,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   const [mode, setMode] = useState<"idle" | "directing" | "replaying">("idle");
   const [directorNote, setDirectorNote] = useState<string>("");
   const [settings, setSettings] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const stageHost = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const liveQueue = useRef<PerformItem[]>([]);
@@ -86,7 +87,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
 
   // Stage
   const stageMembers: StageMember[] = useMemo(
-    () => (state?.members ?? []).map((m) => ({ id: m.id, name: m.name, personaUrl: m.persona_url, present: present.has(m.id) })),
+    () => (state?.members ?? []).map((m) => ({ id: m.id, name: m.name, personaUrl: m.persona_url, awayUrl: m.persona_away_url ?? null, present: present.has(m.id) })),
     [state?.members, present],
   );
   useEffect(() => {
@@ -198,7 +199,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       const byId = new Map(s.renders.map((r) => [r.message_id, r]));
       const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id)));
       setMode("replaying");
-      const ctl = stage.current.play(items, {});
+      const ctl = stage.current.play(items, { speed });
       (window as any).__sceneCtl = ctl;
       await ctl.done;
       const maxSeq = Math.max(...s.messages.map((m) => m.seq));
@@ -262,6 +263,16 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         {mode === "replaying" && (
           <div className="replay-ctl">
             <span className="director-note">{directorNote}</span>
+            <button
+              className="ghost small"
+              onClick={() => {
+                const s = speed === 1 ? 1.25 : 1;
+                setSpeed(s);
+                (window as any).__sceneCtl?.setSpeed(s);
+              }}
+            >
+              {speed === 1 ? "1×" : "1.25×"}
+            </button>
             <button className="ghost small" onClick={() => (window as any).__sceneCtl?.skip()}>
               Skip
             </button>

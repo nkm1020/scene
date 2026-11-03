@@ -41,7 +41,13 @@ export const STAGE_CSS = String.raw`
 .sc-name{position:absolute;left:50%;top:-11%;transform:translateX(-50%);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);white-space:nowrap;transition:color .4s,opacity .4s}
 .sc-flicker{animation:sc-flicker 2.7s steps(1) infinite}
 @keyframes sc-flicker{0%,100%{opacity:1}31%{opacity:.86}32%{opacity:1}63%{opacity:.93}64%{opacity:1}}
-/* presence: absent = head bowed + dim */
+/* presence: absent = bowed pose (Muse Image edit) or a tilted head (fallback) + dim */
+.sc-pose{transition:opacity .6s ease}
+.sc-pose.away{position:absolute;left:0;right:0;bottom:0;opacity:0}
+.sc-pose.away .sc-img{width:100%;height:auto}
+.sc-seat.has-away.absent .sc-pose.here{opacity:0}
+.sc-seat.has-away.absent .sc-pose.away{opacity:1}
+.sc-seat.has-away.absent .sc-layer.head{transform:none}
 .sc-seat.absent .sc-layer.head{transform:perspective(500px) translateY(9%) rotateX(-38deg)}
 .sc-seat.absent{filter:brightness(.42) saturate(.6)}
 .sc-seat.absent .sc-disc{opacity:.25}.sc-seat.absent .sc-beam{opacity:.06}

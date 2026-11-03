@@ -1,5 +1,6 @@
 import { Ledger } from "@/core/ledger";
-import { createPersona } from "@/core/persona";
+import { after } from "next/server";
+import { createPersona, createAwayPose } from "@/core/persona";
 import { authMember, db, publicUrl, saveLedger, jsonError, HttpError } from "@/server/db";
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -21,7 +22,22 @@ export async function POST(req: Request) {
     const { error } = await db().storage.from("personas").upload(path, p.png, { contentType: "image/png", upsert: true });
     if (error) throw error;
     const url = publicUrl("personas", path);
-    await db().from("members").update({ persona_url: url, persona_spec: spec }).eq("id", member.id).throwOnError();
+    await db().from("members").update({ persona_url: url, persona_away_url: null, persona_spec: spec }).eq("id", member.id).throwOnError();
+    // Presence posture (head bowed) is made after the response: Muse Image edit of the same source + SAM 3.1.
+    after(async () => {
+      const awayLedger = new Ledger();
+      try {
+        const away = await createAwayPose(p.sourceImage, { ledger: awayLedger });
+        const awayPath = path.replace(/\.png$/, "-away.png");
+        await db().storage.from("personas").upload(awayPath, away.png, { contentType: "image/png", upsert: true });
+        const { data: cur } = await db().from("members").select("persona_url").eq("id", member.id).single();
+        if (cur?.persona_url === url) await db().from("members").update({ persona_away_url: publicUrl("personas", awayPath) }).eq("id", member.id);
+      } catch (err) {
+        console.error("away pose failed", err);
+      } finally {
+        await saveLedger(awayLedger, member.room_id);
+      }
+    });
     const s = ledger.summary();
     return Response.json({ personaUrl: url, ms: Date.now() - t0, usd: s.usd, calls: s.calls, phrase: p.phrase, coverage: p.maskCoverage, flags: p.flags });
   } catch (e) {

@@ -87,6 +87,36 @@ export async function generateImage(
   return { bytes: Buffer.from(json.data[0].b64_json, "base64"), format, ms };
 }
 
+/** Muse Image edit: same character, new pose (input images as data URLs). */
+export async function editImage(
+  images: Buffer[],
+  prompt: string,
+  opts: { format?: "png" | "webp" | "jpeg"; op?: string; ledger?: Ledger } = {},
+): Promise<GeneratedImage> {
+  const ledger = opts.ledger ?? globalLedger;
+  const format = opts.format ?? "png";
+  const t0 = performance.now();
+  const res = await fetch(`${META_BASE}/images/edits`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key()}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: MODELS.image,
+      prompt,
+      images: images.map((b) => ({ image_url: `data:image/png;base64,${b.toString("base64")}` })),
+      output_format: format,
+    }),
+  });
+  const ms = Math.round(performance.now() - t0);
+  const text = await res.text();
+  if (!res.ok) {
+    ledger.add({ model: "muse-image-1.0", op: opts.op ?? "image.edit", ms, usd: 0, ok: false, note: `HTTP ${res.status}` });
+    throw new MetaError(res.status, text, "image.edit");
+  }
+  const json = JSON.parse(text) as { data: { b64_json: string }[]; usage?: { input_tokens: number; output_tokens: number } };
+  ledger.add({ model: "muse-image-1.0", op: opts.op ?? "image.edit", ms, usd: PRICE.imagePerImage, ok: true, inputTokens: json.usage?.input_tokens, outputTokens: json.usage?.output_tokens });
+  return { bytes: Buffer.from(json.data[0].b64_json, "base64"), format, ms };
+}
+
 // ───────────────────────────── SAM 3.1 ─────────────────────────────
 
 export interface SamMask {

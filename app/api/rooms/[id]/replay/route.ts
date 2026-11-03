@@ -29,7 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const renderAll = Promise.all(missing.map((m) => renderMessage({ id: m.id, room_id: id, member_id: m.member_id, text: m.text })));
     const run = await directSegment(
       segment.map((m: any) => ({ id: m.id, sender_id: m.member_id, sender_name: m.members?.name, text: m.text })),
-      { ledger, reasoningEffort: "low" },
+      { ledger, reasoningEffort: "minimal" },
     );
     await Promise.all(
       run.directions.map((d) =>

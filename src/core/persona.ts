@@ -5,7 +5,7 @@
 // Checks (PLAN 6.6): largest mask covers 5–80% of the frame, alpha ≥ 3%. Else retry once, else default persona.
 
 import sharp from "sharp";
-import { generateImage, segment, type SamMask } from "./meta";
+import { generateImage, editImage, segment, type SamMask } from "./meta";
 import type { Ledger } from "./ledger";
 
 export interface PersonaSpec {
@@ -158,4 +158,24 @@ export async function createPersona(spec: PersonaSpec, opts: { ledger?: Ledger; 
   const e = new Error(`persona failed after ${maxAttempts} attempts: ${flags.join("; ")}`);
   (e as any).cause = lastErr;
   throw e;
+}
+
+export const AWAY_PROMPT =
+  "Same character, same art style, same outfit, same framing and plain light gray background. Only change the pose: head bowed forward and tilted down toward the table, eyes closed, dozing. Keep the thick outline and flat cel shading.";
+
+/**
+ * Presence posture: Muse Image edits the persona's own source image into an "away" pose (head bowed, eyes closed),
+ * SAM 3.1 cuts it out the same way. Members who are not in the room are shown in this pose.
+ */
+export async function createAwayPose(sourceImage: Buffer, opts: { ledger?: Ledger } = {}): Promise<{ png: Buffer; width: number; height: number }> {
+  const img = await editImage([sourceImage], AWAY_PROMPT, { op: "persona.away", ledger: opts.ledger });
+  const meta = await sharp(img.bytes).metadata();
+  const W = meta.width!, H = meta.height!;
+  for (const phrase of SAM_PHRASES) {
+    const seg = await segment(img.bytes, "image/png", phrase, { op: "persona.away_alpha", ledger: opts.ledger });
+    if (!seg.masks.length) continue;
+    const out = await applyAlpha(img.bytes, await unionAlpha(seg.masks, W, H), W, H);
+    if (out.png && out.coverage >= 0.05 && out.coverage <= 0.8) return { png: out.png, width: out.width, height: out.height };
+  }
+  throw new Error("away pose: no usable mask");
 }
