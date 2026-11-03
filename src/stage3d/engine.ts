@@ -18,6 +18,12 @@ export type Camera = "room" | "close";
 export type Pose = Emotion | "away";
 export type Look = "speaker" | "camera" | "down";
 
+const wrapPi = (a: number) => {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+};
+
 /** What a listener's reaction looks like above their head (neutral and asleep show nothing). */
 const REACTION_EMOJI: Partial<Record<Pose, string>> = { laughing: "😂", surprised: "😮", angry: "💢", sad: "😢", happy: "😊" };
 
@@ -106,20 +112,19 @@ const TABLE_Y = 0.34; // table top
 const EYE_Y = 0.7; // the viewer's eyes, a little above everyone else's so the table reads
 const CENTER = new THREE.Vector3(0, TABLE_Y, 0);
 const ENV_FPS = 30;
-const FPS = 12; // stop motion: a new picture twelve times a second (animated "on twos")
-const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b"];
+const FPS = 12; // stop motion: the puppets get a new picture twelve times a second (animated "on twos")
+const RENDER_FPS = 24; // the camera moves on ones, as a motion-control rig would shoot it
+const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side"];
 
 /**
- * Seats around a round table for the viewer plus `others` people. The viewer keeps a little elbow room
- * (the neighbours sit at least 115° away) so the people beside you stay in view; the rest are spaced evenly.
+ * Seats around a round table: the viewer plus `others` people, evenly spaced around the whole circle.
  * Angles are measured from the viewer's seat, going from the viewer's left around to the right.
  */
 function seatRing(others: number) {
   const n = others + 1;
-  const gap = others <= 1 ? Math.PI : Math.max((2 * Math.PI) / n, (115 * Math.PI) / 180);
-  const step = others <= 1 ? 0 : (2 * Math.PI - 2 * gap) / (others - 1);
-  const angles = Array.from({ length: Math.max(0, others) }, (_, i) => gap + i * step);
-  const rSeat = Math.max(0.52, others <= 1 ? 0 : 0.26 / Math.sin(step / 2));
+  const step = (2 * Math.PI) / n;
+  const angles = Array.from({ length: Math.max(0, others) }, (_, i) => (i + 1) * step);
+  const rSeat = Math.max(0.47, 0.2 / Math.sin(Math.PI / n));
   return { rSeat, rTable: rSeat - 0.17, angles };
 }
 
@@ -186,6 +191,7 @@ interface Figure {
   cards: Set<THREE.Object3D>; // flat cut-outs: always turned to the viewer
   current: Pose; // the pose the director asked for
   shown: string; // the picture on screen right now (a pose or one of its replacement frames)
+  frameKey: string; // the picture chosen at the last exposure, before the view (front, three-quarter, side) is applied
   seat: THREE.Vector3;
   yaw: number;
   targetYaw: number;
@@ -511,8 +517,8 @@ export class Stage {
   private current: { cancelled: boolean; skip: boolean; speed: number } | null = null;
   private focus: Figure | null = null;
   private lineSeq = 0;
-  private idleLook = { at: 0, i: -1 }; // portrait phones: the idle camera looks from friend to friend
   private lastStep = 0;
+  private lastRender = 0;
   private step = 0;
   private lamp: THREE.SpotLight | null = null;
   private composer: EffectComposer | null = null;
@@ -554,7 +560,7 @@ export class Stage {
     try {
       const composer = new EffectComposer(r);
       composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bokeh = new CutoutBokehPass(this.scene, this.camera, { focus: 1.2, aperture: 0.004, maxblur: 0.007 });
+      this.bokeh = new CutoutBokehPass(this.scene, this.camera, { focus: 1.2, aperture: 0.006, maxblur: 0.01 });
       composer.addPass(this.bokeh);
       composer.addPass(new OutputPass());
       this.composer = composer;
@@ -674,7 +680,7 @@ export class Stage {
     this.buildTable();
     const { rSeat, angles } = this.ring;
     // the viewer sits at +z looking toward −z; the others go from the viewer's left around to the right
-    this.camPos.set(0, EYE_Y, rSeat + 0.14); // sitting back in the chair
+    this.camPos.set(0, EYE_Y, rSeat + 0.3); // sitting back in the chair, so the seats beside you come into view
     others.forEach((m, i) => {
       const a = -angles[i];
       const seat = new THREE.Vector3(Math.sin(a) * rSeat, 0, Math.cos(a) * rSeat);
@@ -710,6 +716,7 @@ export class Stage {
       cards: new Set(),
       current: member.present ? "neutral" : "away",
       shown: "",
+      frameKey: "neutral",
       seat: seat.clone(),
       yaw: 0,
       targetYaw: 0,
@@ -909,11 +916,16 @@ export class Stage {
 
   private frame() {
     const now = performance.now();
-    if (now - this.lastStep < 1000 / FPS - 4) return; // hold the picture: stop motion
-    this.lastStep = now;
-    const s = ++this.step;
+    if (now - this.lastRender < 1000 / RENDER_FPS - 4) return;
+    this.lastRender = now;
+    // the puppets move only on every other picture: stop motion on twos, while the camera glides on ones
+    const exposure = now - this.lastStep >= 1000 / FPS - 4;
+    if (exposure) {
+      this.lastStep = now;
+      this.step++;
+    }
+    const s = this.step;
     const dt = 1 / FPS;
-    this.lookAround(now);
     for (const p of this.props) p.rotation.y = Math.atan2(this.camPos.x - p.position.x, this.camPos.z - p.position.z);
     this.sampleMove(now);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
@@ -923,51 +935,26 @@ export class Stage {
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.look);
     // set lights drift a hair between exposures
-    if (this.lamp) this.lamp.intensity = this.lampBase * (1 + (Math.random() - 0.5) * 0.035);
-    for (const fl of [...this.roomFlicker, ...this.tableFlicker]) fl.light.intensity = fl.base * (1 + (Math.random() - 0.5) * fl.amount);
+    if (exposure && this.lamp) this.lamp.intensity = this.lampBase * (1 + (Math.random() - 0.5) * 0.035);
+    if (exposure) for (const fl of [...this.roomFlicker, ...this.tableFlicker]) fl.light.intensity = fl.base * (1 + (Math.random() - 0.5) * fl.amount);
     const w = this.root.clientWidth, h = this.root.clientHeight;
     const v = new THREE.Vector3();
     const { rSeat, rTable } = this.ring;
     for (const f of this.figures.values()) {
-      // body turns on an S curve; a quarter turn takes about half a second
-      let dy = f.targetYaw - f.turn.p1;
-      while (dy > Math.PI) dy -= 2 * Math.PI;
-      while (dy < -Math.PI) dy += 2 * Math.PI;
-      if (Math.abs(dy) > 1e-3) f.turn.to(f.turn.p1 + dy, now, (Math.min(0.9, 0.28 + 0.38 * Math.abs(dy)) * 1000) / (this.current?.speed ?? 1));
-      f.yaw = f.turn.at(now)[0];
-      f.group.rotation.y = f.yaw;
-      // a small bounce when a line starts
-      let hop = 0;
-      if (f.hopT >= 0) {
-        f.hopT += dt;
-        hop = f.hopT < 0.34 ? Math.sin((f.hopT / 0.34) * Math.PI) * 0.022 : 0;
-      }
-      // clay boil: the figure was touched between every other exposure
-      if (s % 2 === 0) f.boil = { x: (Math.random() - 0.5) * 0.003, z: (Math.random() - 0.5) * 0.003, r: (Math.random() - 0.5) * 0.012, s: 1 + (Math.random() - 0.5) * 0.008 };
       const asleep = f.dim > 0.5;
-      const breath = asleep ? Math.sin((s / FPS) * 1.6 + f.seat.x * 5) * 0.01 : f.breathe ? Math.sin((s / FPS) * 4) * 0.02 : 0;
-      f.body.position.set(f.boil.x, hop, f.boil.z);
-      f.body.scale.set(f.boil.s, f.boil.s * (1 + breath), f.boil.s);
-      // lean and nod around the stool top
-      f.gestureT += dt;
-      let tiltX = 0, wig = 0;
-      if (f.gesture === "nod") tiltX += Math.sin(f.gestureT * 9) * 0.1 * Math.max(0, 1 - f.gestureT / 1.2);
-      if (f.gesture === "shake") wig = Math.sin(f.gestureT * 14) * 0.16 * Math.max(0, 1 - f.gestureT / 1.0);
-      if (f.gesture === "lean_in") tiltX += 0.12;
-      if (f.gesture === "step_back") tiltX -= 0.07;
-      f.tilt.rotation.set(tiltX, wig, f.boil.r);
-      // cut-outs mostly face the viewer but keep a quarter of the body's turn, so the clay relief shows its side
-      if (f.cards.size) {
-        let toCam = this.yawTo(f.seat, this.camPos) - f.yaw;
-        while (toCam > Math.PI) toCam -= 2 * Math.PI;
-        while (toCam < -Math.PI) toCam += 2 * Math.PI;
-        for (const o of f.cards) o.rotation.y = toCam * 0.72;
+      if (exposure) this.animate(f, now, s, dt, rTable, rSeat);
+      // cut-outs always face the lens; what turns is the picture: front, three-quarter or side, mirrored to face
+      // the way the body faces (the views are replacement pictures, like a stop-motion puppet's turnaround)
+      const rel = wrapPi(this.yawTo(f.group.position, this.camPos) - f.yaw);
+      const a = Math.abs(rel);
+      const view = asleep || f.wake > 0 ? "front" : a < 0.42 ? "front" : a < 1.15 ? "q3" : "side";
+      const facing = new THREE.Vector3(Math.sin(f.yaw), 0, Math.cos(f.yaw)).transformDirection(this.camera.matrixWorldInverse);
+      const mirror = view !== "front" && facing.x < 0;
+      for (const o of f.cards) {
+        o.rotation.y = rel;
+        o.scale.x = mirror ? -1 : 1;
       }
-      f.dim += (f.targetDim - f.dim) * 0.4;
-      // asleep: pulled in to the table, slumped over its edge
-      f.group.position.copy(f.seat).multiplyScalar(1 - (0.08 * f.dim * rTable) / rSeat);
-      for (const { m, base } of f.materials) m.color.copy(base).multiplyScalar(1 - 0.3 * f.dim);
-      this.showFrame(f, this.pickFrame(f));
+      this.showFrame(f, view !== "front" && f.poses.has(view) ? view : f.frameKey);
       // name card at the figure's own lap, so it can only ever sit on its own figure
       v.copy(f.group.position).multiplyScalar(1 - 0.06 / rSeat).setY(TABLE_Y + 0.02).project(this.camera);
       const onScreen = v.z < 1 && v.x > -1.1 && v.x < 1.1;
@@ -992,6 +979,42 @@ export class Stage {
       (this.bokeh.uniforms as any).focus.value = this.camera.position.distanceTo(this.look);
       this.composer.render();
     } else this.renderer.render(this.scene, this.camera);
+  }
+
+  /** One exposure of a puppet: its turn, bounce, clay boil, breath, gesture, dimming and which picture it shows. */
+  private animate(f: Figure, now: number, s: number, dt: number, rTable: number, rSeat: number) {
+    {
+      // body turns on an S curve; a quarter turn takes about half a second
+      const dy = wrapPi(f.targetYaw - f.turn.p1);
+      if (Math.abs(dy) > 1e-3) f.turn.to(f.turn.p1 + dy, now, (Math.min(0.9, 0.28 + 0.38 * Math.abs(dy)) * 1000) / (this.current?.speed ?? 1));
+      f.yaw = f.turn.at(now)[0];
+      f.group.rotation.y = f.yaw;
+      // a small bounce when a line starts
+      let hop = 0;
+      if (f.hopT >= 0) {
+        f.hopT += dt;
+        hop = f.hopT < 0.34 ? Math.sin((f.hopT / 0.34) * Math.PI) * 0.022 : 0;
+      }
+      // clay boil: the figure was touched between every other exposure
+      if (s % 2 === 0) f.boil = { x: (Math.random() - 0.5) * 0.003, z: (Math.random() - 0.5) * 0.003, r: (Math.random() - 0.5) * 0.012, s: 1 + (Math.random() - 0.5) * 0.008 };
+      const asleep = f.dim > 0.5;
+      const breath = asleep ? Math.sin((s / FPS) * 1.6 + f.seat.x * 5) * 0.01 : f.breathe ? Math.sin((s / FPS) * 4) * 0.02 : 0;
+      f.body.position.set(f.boil.x, hop, f.boil.z);
+      f.body.scale.set(f.boil.s, f.boil.s * (1 + breath), f.boil.s);
+      // lean and nod around the stool top
+      f.gestureT += dt;
+      let tiltX = 0, wig = 0;
+      if (f.gesture === "nod") tiltX += Math.sin(f.gestureT * 9) * 0.1 * Math.max(0, 1 - f.gestureT / 1.2);
+      if (f.gesture === "shake") wig = Math.sin(f.gestureT * 14) * 0.16 * Math.max(0, 1 - f.gestureT / 1.0);
+      if (f.gesture === "lean_in") tiltX += 0.12;
+      if (f.gesture === "step_back") tiltX -= 0.07;
+      f.tilt.rotation.set(tiltX, wig, f.boil.r);
+      f.dim += (f.targetDim - f.dim) * 0.4;
+      // asleep: pulled in to the table, slumped over its edge
+      f.group.position.copy(f.seat).multiplyScalar(1 - (0.08 * f.dim * rTable) / rSeat);
+      for (const { m, base } of f.materials) m.color.copy(base).multiplyScalar(1 - 0.3 * f.dim);
+      f.frameKey = this.pickFrame(f);
+    }
   }
 
   // ───────── audio ─────────
@@ -1081,29 +1104,12 @@ export class Stage {
     o.react.classList.toggle("on", !!e);
   }
 
-  /**
-   * A phone held upright sees one friend at a time, so while nobody is talking the camera drifts from one
-   * friend to the next and back to the middle, the way you would look around a table.
-   */
-  private lookAround(now: number) {
-    if (this.current || !this.portrait() || this.figures.size < 2) {
-      this.idleLook.at = now;
-      return;
-    }
-    if (now - this.idleLook.at < 4200) return;
-    this.idleLook.at = now;
-    const list = [...this.figures.values()].filter((f) => f.dim < 0.5); // let sleepers sleep
-    if (!list.length) return;
-    this.idleLook.i = (this.idleLook.i + 1) % list.length;
-    this.shot(list[this.idleLook.i], "room");
-  }
-
   /** Where the viewer looks: across the table at rest, or turned toward the speaker. */
   private shot(f: Figure | null, camera: Camera, snap = false) {
     this.focus = f;
     this.shotCamera = camera;
     const portrait = this.portrait();
-    const rest = new THREE.Vector3(0, portrait ? 0.5 : 0.44, -this.ring.rSeat * 0.6);
+    const rest = new THREE.Vector3(0, portrait ? 0.56 : 0.48, -this.ring.rSeat * 0.6);
     if (!f && this.figures.size === 1) {
       // one person across the table (the figure preview): look at them, closer
       const only = [...this.figures.values()][0];
@@ -1111,8 +1117,8 @@ export class Stage {
     } else if (!f) {
       this.aim(rest, this.baseFov, snap);
     } else {
-      const face = new THREE.Vector3(f.seat.x, portrait ? 0.54 : 0.5, f.seat.z);
-      this.aim(rest.clone().lerp(face, portrait ? 1 : 0.75), this.baseFov * (camera === "close" ? 0.7 : 1), snap);
+      const face = new THREE.Vector3(f.seat.x, portrait ? 0.58 : 0.52, f.seat.z);
+      this.aim(rest.clone().lerp(face, portrait ? 0.85 : 0.5), this.baseFov * (camera === "close" ? 0.9 : 1), snap);
     }
   }
 
@@ -1137,9 +1143,9 @@ export class Stage {
       this.fov = fov;
       return;
     }
-    // longer pans and bigger zooms take longer: about 0.8 s to a neighbour, 1.3 s across the whole table
+    // an unhurried head turn: about a second to the person beside you, never more than 1.8 s
     const angle = this.look.clone().sub(this.camPos).angleTo(target.clone().sub(this.camPos));
-    m.dur = (Math.min(1.3, 0.6 + 0.7 * angle + 0.6 * Math.abs(Math.log(fov / this.fov))) * 1000) / (this.current?.speed ?? 1);
+    m.dur = (Math.min(1.8, 0.85 + 0.9 * angle + 0.8 * Math.abs(Math.log(fov / this.fov))) * 1000) / (this.current?.speed ?? 1);
     // keep only the part of the old speed that already heads toward the new shot
     const d = target.clone().sub(this.look);
     m.v0.copy(d).multiplyScalar(d.lengthSq() > 1e-8 ? Math.max(0, v.dot(d) / d.lengthSq()) : 0);
@@ -1213,9 +1219,9 @@ export class Stage {
     this.showCaption(item);
 
     const dur = itemDuration(item) / speed;
-    // turn to the speaker: the line starts as the camera slows into the new shot
-    const settling = this.move.t0 + this.move.dur * 0.8 - performance.now();
-    await new Promise((r) => setTimeout(r, Math.max(380 / speed, settling)));
+    // turn to the speaker: the line starts while the head is still turning, the way you turn to someone talking
+    const settling = this.move.t0 + this.move.dur * 0.5 - performance.now();
+    await new Promise((r) => setTimeout(r, Math.min(700 / speed, Math.max(380 / speed, settling))));
     let audio: HTMLAudioElement | null = null;
     if (item.status === "verified" && item.audioUrl) {
       audio = new Audio(item.audioUrl);

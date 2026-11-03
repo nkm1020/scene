@@ -14,17 +14,17 @@ const SRC = "out/set-src";
 const only = (process.argv.find((a) => a.startsWith("--only="))?.slice(7) ?? "walls,floor,props").split(",");
 const CLAY = "Everything is handmade from plasticine and painted wood with faint fingerprints and visible sculpting marks, a stop-motion film set, warm soft even lighting, no people, no text.";
 const WALL = (content: string) =>
-  `Claymation miniature set: one wall of a cozy dining room, photographed straight on, the wall fills the whole frame from the ceiling at the top edge down to the skirting board at the bottom edge, no floor and no ceiling visible: bottle-green patterned wallpaper above walnut wainscot panels; ${content}. ${CLAY}`;
+  `Claymation miniature set: one wall of a cozy dining room, photographed straight on, the wall fills the whole frame from the ceiling at the top edge down to the skirting board at the bottom edge, no floor and no ceiling visible: plain muted sage-green plaster wall with only a faint hand-pressed texture and no pattern, above simple dark walnut wainscot boards; ${content}. Calm, simple and uncluttered, mostly empty wall. ${CLAY}`;
 
 const walls: [string, string][] = [
-  ["wall-front", WALL("in the middle two small framed landscape paintings and a round wall clock, on the right a walnut sideboard with a little glowing lamp, a stack of books and a potted plant")],
-  ["wall-left", WALL("in the middle a tall window with red velvet curtains tied back, showing a night sky with a crescent moon and stars")],
-  ["wall-right", WALL("in the middle a tall walnut dresser with plates displayed on its shelves and a small framed embroidery of a flower beside it")],
-  ["wall-back", WALL("in the middle a wooden door with a brass knob and a coat rack beside it with a striped scarf")],
+  ["wall-front", WALL("one small framed landscape painting hanging slightly left of the middle")],
+  ["wall-left", WALL("one window in the middle with plain dark red curtains, showing a deep blue night sky")],
+  ["wall-right", WALL("one small round wall clock hanging right of the middle")],
+  ["wall-back", WALL("a plain wooden door in the middle")],
 ];
 const floor: [string, string][] = [
-  ["floor", `Top-down photo looking straight down at a wooden floor of dark walnut-brown painted wood planks with plasticine texture, with a round rust and ochre patterned rug in the exact center, filling the frame. ${CLAY}`],
-  ["tabletop", `Top-down photo looking straight down at a round walnut tabletop of painted wood and plasticine, the table fills the frame edge to edge, a cream lace doily exactly in the center, nothing else on it. ${CLAY}`],
+  ["floor", `Top-down photo looking straight down at a wooden floor of dark walnut-brown painted wood planks with plasticine texture, with a plain round dark rust rug in the exact center, filling the frame. ${CLAY}`],
+  ["tabletop", `Top-down photo looking straight down at a round walnut tabletop of painted wood and plasticine, the table fills the frame edge to edge, nothing on it. ${CLAY}`],
 ];
 const props: [string, string, string[]][] = [
   ["cake", `A small claymation birthday cake on a cake stand with five lit candles, pink icing drips, front view at a slight angle from above, centered, small in the frame with empty space around it, on a plain light gray background. ${CLAY}`, ["cake", "cake stand", "candles"]],

@@ -77,7 +77,7 @@ export function buildRoom(sc: THREE.Scene): SetLights {
     ["wall-back", new THREE.Vector3(0, WALL_H / 2, HALF), Math.PI],
   ];
   for (const [name, at, ry] of walls) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, WALL_H), new THREE.MeshBasicMaterial({ map: tex(name), color: "#cdbfae" }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, WALL_H), new THREE.MeshBasicMaterial({ map: tex(name), color: "#9c8f80" }));
     m.position.copy(at);
     m.rotation.y = ry;
     sc.add(m);
@@ -110,7 +110,7 @@ export function buildRoom(sc: THREE.Scene): SetLights {
 export function buildTable(rTable: number, tableY: number) {
   const g = new THREE.Group();
   const walnut = new THREE.MeshStandardMaterial({ color: "#5b3520", roughness: 0.75, normalMap: clayNormalMap(), normalScale: new THREE.Vector2(0.5, 0.5) });
-  const top = new THREE.Mesh(new THREE.CircleGeometry(rTable, 96), new THREE.MeshStandardMaterial({ map: tex("tabletop"), roughness: 0.8 }));
+  const top = new THREE.Mesh(new THREE.CircleGeometry(rTable, 96), new THREE.MeshStandardMaterial({ map: tex("tabletop"), color: "#a8968a", roughness: 0.8 }));
   top.rotation.x = -Math.PI / 2;
   top.position.y = tableY;
   top.receiveShadow = true;

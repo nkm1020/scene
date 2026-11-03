@@ -43,10 +43,12 @@ export function figurePrompt(spec: PersonaSpec): string {
  * Stop-motion replacement frames: small edits of a pose image (mouth shapes, a blink, the other half of a laugh),
  * swapped in at 12 fps by the stage, the way stop-motion films swap faces.
  */
-export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b"] as const;
+export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side"] as const;
 export type FigureFrame = (typeof FIGURE_FRAMES)[number];
 const HOLD = "Same character, same clay style, same stool, same pose, same framing, same plain light gray background and lighting. Change nothing else:";
 const MOVE = "Same character, same clay style, same stool, same framing, same plain light gray background and lighting.";
+// views for seats around the circle: the stage mirrors them for figures that face the other way
+const VIEW = "Same character, same clay style, same wooden stool, same size in the frame, same plain light gray background and soft lighting.";
 export const FRAME_EDITS: Record<FigureFrame, { from: FigurePose; prompt: string }> = {
   talk_a: { from: "neutral", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
   talk_b: { from: "neutral", prompt: `${HOLD} the mouth is a small round "oh", as if talking.` },
@@ -54,6 +56,8 @@ export const FRAME_EDITS: Record<FigureFrame, { from: FigurePose; prompt: string
   wake: { from: "neutral", prompt: `${MOVE} Just woken up and groggy: eyelids drooping, slightly hunched, rubbing one eye with a fist.` },
   happy_b: { from: "happy", prompt: `${HOLD} the mouth is open mid-word, still smiling, as if talking happily.` },
   laughing_b: { from: "laughing", prompt: `${MOVE} Still laughing hard, but now leaning forward with one hand slapping the knee.` },
+  q3: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 45 degrees so the figure faces toward the right side of the picture: a three-quarter view, still sitting with hands on the knees, looking where the body faces.` },
+  side: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 90 degrees so the figure faces the right side of the picture: a full side profile view, still sitting with hands on the knees, looking straight ahead to the right.` },
   surprised_b: { from: "surprised", prompt: `${HOLD} the mouth is a smaller open oval, mid-word.` },
   angry_b: { from: "angry", prompt: `${HOLD} the mouth is pressed shut in a grumpy pout.` },
   sad_b: { from: "sad", prompt: `${HOLD} the mouth is slightly open mid-word, as if speaking quietly.` },
