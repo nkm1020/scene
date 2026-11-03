@@ -1,0 +1,14 @@
+import "dotenv/config";
+import { readFileSync, writeFileSync } from "node:fs";
+import sharp from "sharp";
+import { segment } from "../../src/core/meta";
+import { unionAlpha, applyAlpha } from "../../src/core/persona";
+const name = process.argv[2] ?? "Sam";
+const img = readFileSync(`spikes/meta/${name}-source.png`);
+const { width: W, height: H } = await sharp(img).metadata();
+const seg = await segment(img, "image/png", "person");
+console.log(seg.masks.map((m) => ({ id: m.objectId, b: m.bounds, r: [m.width, m.height] })));
+const out = await applyAlpha(img, await unionAlpha(seg.masks, W!, H!), W!, H!);
+writeFileSync(`spikes/meta/${name}-persona.png`, out.png!);
+await sharp({ create: { width: out.width, height: out.height, channels: 4, background: { r: 20, g: 30, b: 60, alpha: 1 } } }).composite([{ input: out.png! }]).png().toFile(`spikes/meta/${name}-on-dark.png`);
+console.log("coverage", out.coverage, out.width, out.height);
