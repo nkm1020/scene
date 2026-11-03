@@ -531,7 +531,7 @@ function Join({ roomId, roomName, onDone }: { roomId: string; roomName: string; 
         {step === "name" && (
           <>
             <h1>Take a seat.</h1>
-            <p className="muted">Your friends will see you as a hologram at the table, speaking your messages in your voice.</p>
+            <p className="muted">Your friends will see you as a little clay figure on the table, saying your messages in your voice.</p>
             <label>Your name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="e.g. Sam" autoFocus />
             <label>Voice until you register yours</label>

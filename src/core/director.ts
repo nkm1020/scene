@@ -149,9 +149,10 @@ For EVERY message, in the original order, direct the whole table:
 - gesture of the speaker: one of ${GESTURES.join(", ")}
 - camera: "close" for punchlines, reveals and strong reactions; otherwise "room"
 - pause_ms: silence BEFORE this message (0-1500). Longer pauses for comic timing and awkward silences.
-- reactions: one entry for EACH other roster member (never the speaker): their pose (${POSES.join(", ")}) and where they look (${LOOKS.join(", ")}).
-  Members who are not connected are dozing: keep them "away" + "down", UNLESS the line is about them, addressed to them, or would obviously wake them; then pick the pose they would have and look at the speaker.
-  React to what the line means to that person (the one being kept out of a secret is confused; the one in on the joke laughs).
+- reactions: listeners (never the speaker) whose reaction differs from the default, with their pose (${POSES.join(", ")}) and where they look (${LOOKS.join(", ")}).
+  Defaults (omit these): a connected member listens with "neutral" looking at the speaker; a member who is not connected keeps dozing ("away", "down").
+  Wake a dozing member only when the line is about them, addressed to them, or would obviously wake them.
+  React to what the line means to that person (the one being kept out of a secret is confused; the one in on the joke laughs). Most lines need one or two reactions, not all.
 You never write, quote, translate, summarize or change any message text. Output only ids and the fields above.`;
 
 export interface DirectorRun {

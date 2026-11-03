@@ -1,11 +1,11 @@
 // npm run demo — reproduce Scene end to end with one key.
-//   seed room "wrong chat" → personas (Muse Image + SAM 3.1) → optional voice enrollment (Voice Transcribe read-back)
+//   seed room "wrong chat" → clay figures (Muse Image + SAM 3.1 + SAM 3D) → optional voice enrollment (Voice Transcribe read-back)
 //   → Spark 1.3 directs the missed segment (validate_directions) → Qwen3-TTS + Voice Transcribe round trip per line
 //   → out/replay.html (self-contained) + out/receipt.json
 //
 // Flags:
 //   --voice none            skip TTS (captions + SFX); Meta models still run
-//   --reuse-personas        use the committed seed personas instead of generating new ones
+//   --reuse-figures         use the committed seed figures (public/seed/figures) instead of sculpting new ones
 //   --enroll <wav>          enroll Sam's voice from a recording of the three enrollment sentences
 //   --inject-text           validator demo: inject a "text" field into Spark's first output (must be rejected, D4)
 //   --effort low|medium     Spark reasoning effort (default low)
@@ -14,13 +14,13 @@ import "dotenv/config";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { Ledger } from "../src/core/ledger";
-import { createPersona, createAwayPose } from "../src/core/persona";
+import { createFigureBase, createFigurePoses, FIGURE_POSES, type FigurePoseAsset } from "../src/core/figure";
 import { directSegment, type Direction } from "../src/core/director";
 import { renderVoice, verifyEnrollment, type VoiceRender, type VoiceSpec } from "../src/core/voice";
 import { ttsEndpoint, ttsConcurrency, type Voice } from "../src/core/tts";
 import { SEED_MEMBERS, SEED_MESSAGES, ENROLL_SENTENCES } from "../src/core/seed";
 import { buildReplayHtml, dataUrl } from "../src/core/export";
-import type { PerformItem } from "../src/stage/engine";
+import type { PerformItem } from "../src/stage3d/engine";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -54,26 +54,45 @@ async function main() {
     process.exit(1);
   }
   mkdirSync(path.join(OUT, "audio"), { recursive: true });
-  mkdirSync(path.join(OUT, "personas"), { recursive: true });
+  mkdirSync(path.join(OUT, "figures"), { recursive: true });
 
   const voiceOn = !flag("voice") || opt("voice") !== "none";
   const tts = voiceOn ? ttsEndpoint() : null;
   log(`Scene demo · room "wrong chat" · ${SEED_MESSAGES.length} missed messages · voice: ${tts ? "Qwen3-TTS " + tts : "off (captions)"}`);
 
-  // 1) Personas
-  log("\n[1/4] Personas: Muse Image draws, SAM 3.1 cuts out; Muse Image edits an away pose (head bowed) for presence");
-  const personas = await pool(SEED_MEMBERS, 3, async (m) => {
-    const file = path.join(OUT, "personas", `${m.id}.webp`);
-    if (flag("reuse-personas") && existsSync(`public/seed/${m.id}.webp`)) {
-      log(`  ${m.name}: reused public/seed/${m.id}.webp`);
-      return { png: readFileSync(`public/seed/${m.id}.webp`), away: existsSync(`public/seed/${m.id}-away.webp`) ? readFileSync(`public/seed/${m.id}-away.webp`) : null };
+  // 1) Figures
+  const lift = !!process.env.FAL_KEY;
+  log(`\n[1/4] Figures: Muse Image sculpts a clay figurine and six expressions, SAM 3.1 masks each, ${lift ? "SAM 3D lifts each into a mesh" : "SAM 3D skipped (no FAL_KEY; images stand in)"}`);
+  const figures = await pool(SEED_MEMBERS, 3, async (m) => {
+    const dir = path.join(OUT, "figures", m.id);
+    mkdirSync(dir, { recursive: true });
+    const seedDir = `public/seed/figures/${m.id}`;
+    const assets: Record<string, { img: string; glb: string | null }> = {};
+    if (flag("reuse-figures") && existsSync(`${seedDir}/neutral.webp`)) {
+      for (const pose of FIGURE_POSES) {
+        if (!existsSync(`${seedDir}/${pose}.webp`)) continue;
+        let glb: string | null = null;
+        if (existsSync(`${seedDir}/${pose}.glb`)) {
+          writeFileSync(path.join(dir, `${pose}.glb`), readFileSync(`${seedDir}/${pose}.glb`));
+          glb = `figures/${m.id}/${pose}.glb`;
+        }
+        assets[pose] = { img: dataUrl(readFileSync(`${seedDir}/${pose}.webp`), "image/webp"), glb };
+      }
+      log(`  ${m.name}: reused ${Object.keys(assets).length} poses from ${seedDir}`);
+      return assets;
     }
-    const p = await createPersona(m, { ledger });
-    writeFileSync(file, p.png);
-    const away = await createAwayPose(p.sourceImage, { ledger }).catch((e) => (log(`  ${m.name}: away pose failed (${e.message}); CSS tilt fallback`), null));
-    if (away) writeFileSync(path.join(OUT, "personas", `${m.id}-away.webp`), away.png);
-    log(`  ${m.name}: "${m.hair}, ${m.outfit}, ${m.vibe}" → ${p.width}×${p.height}, SAM "${p.phrase}", mask ${(p.maskCoverage * 100).toFixed(0)}%${away ? ", away pose ✓" : ""}${p.flags.length ? " " + p.flags.join(",") : ""}`);
-    return { png: p.png, away: away?.png ?? null };
+    const keep = (a: FigurePoseAsset) => {
+      if (!a.cutout.length) return;
+      writeFileSync(path.join(dir, `${a.pose}.webp`), a.cutout);
+      if (a.glb) writeFileSync(path.join(dir, `${a.pose}.glb`), a.glb);
+      assets[a.pose] = { img: dataUrl(a.cutout, "image/webp"), glb: a.glb ? `figures/${m.id}/${a.pose}.glb` : null };
+    };
+    const base = await createFigureBase(m, { ledger, skip3d: !lift });
+    keep(base);
+    const poses = await createFigurePoses(base.image, { ledger, skip3d: !lift, onPose: keep });
+    const failed = poses.filter((p) => !p.cutout.length).map((p) => p.pose);
+    log(`  ${m.name}: "${m.hair}, ${m.outfit}, ${m.vibe}" → ${Object.keys(assets).length} poses${lift ? `, ${Object.values(assets).filter((a) => a.glb).length} meshes` : ""}${failed.length ? `, missing ${failed.join(",")}` : ""}`);
+    return assets;
   });
 
   // 2) Voice enrollment (optional, Sam only — you can only enroll your own voice)
@@ -95,8 +114,10 @@ async function main() {
 
   // 3) Director
   log(`\n[3/4] Director: Muse Spark 1.3 directs ${SEED_MESSAGES.length} lines in one call, validate_directions checks every output`);
+  const roster = SEED_MEMBERS.map((m) => ({ member_id: m.id, name: m.name, present: m.id !== "jay" }));
   const run = await directSegment(SEED_MESSAGES, {
     ledger,
+    roster,
     reasoningEffort: (opt("effort") as any) ?? "low",
     tamper: flag("inject-text")
       ? (out, attempt) => {
@@ -135,6 +156,7 @@ async function main() {
       gesture: d.gesture,
       camera: d.camera,
       pauseMs: d.pause_ms,
+      reactions: (d.reactions ?? []).map((x) => ({ memberId: x.member_id, pose: x.pose, look: x.look })),
       status: r.status,
       audioUrl: r.wav ? dataUrl(r.wav, "audio/wav") : null,
       envelope: r.envelope,
@@ -147,15 +169,14 @@ async function main() {
   const members = SEED_MEMBERS.map((m, i) => ({
     id: m.id,
     name: m.name,
-    personaUrl: dataUrl(personas[i].png, "image/webp"),
-    awayUrl: personas[i].away ? dataUrl(personas[i].away!, "image/webp") : null,
-    present: m.id !== "jay", // Jay is away in the seed room: bowed until he performs a line
+    figure: figures[i],
+    present: m.id !== "jay", // Jay is not in the room: he dozes until a line wakes him
   }));
   const receipt = {
     room: "wrong chat",
     generatedAt: new Date().toISOString(),
     wallMs: Date.now() - t0,
-    models: { director: "muse-spark-1.3", persona: ["muse-image-1.0", "sam-3.1"], readback: "muse-voice-transcribe-1.0", voice: tts ? "Qwen3-TTS (Apache 2.0, self-hosted, external)" : "off" },
+    models: { director: "muse-spark-1.3", figures: ["muse-image-1.0", "sam-3.1", lift ? "sam-3d-objects (fal.ai)" : "sam-3d skipped"], readback: "muse-voice-transcribe-1.0", voice: tts ? "Qwen3-TTS (Apache 2.0, self-hosted, external)" : "off" },
     summary,
     perMessageUsd: summary.usd / SEED_MESSAGES.length,
     enrollment,
@@ -174,7 +195,7 @@ async function main() {
 
   log(`\nReceipt: ${summary.calls} calls, $${summary.usd.toFixed(4)} total, $${receipt.perMessageUsd.toFixed(5)} per message, ${(receipt.wallMs / 1000).toFixed(1)} s wall`);
   for (const [model, v] of Object.entries(summary.byModel)) log(`  ${model.padEnd(26)} ${String(v.calls).padStart(3)} calls  $${v.usd.toFixed(4)}  ${(v.ms / 1000).toFixed(1)} s`);
-  log(`\nWrote ${OUT}/replay.html and ${OUT}/receipt.json`);
+  log(`\nWrote ${OUT}/replay.html and ${OUT}/receipt.json${lift ? " (3D meshes in out/figures; serve the folder, e.g. node scripts/serve-out.mjs, so the browser can load them)" : ""}`);
 }
 
 main().catch((e) => {

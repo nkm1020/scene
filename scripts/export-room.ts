@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { buildReplayHtml, dataUrl } from "../src/core/export";
-import type { PerformItem } from "../src/stage/engine";
+import type { PerformItem } from "../src/stage3d/engine";
 
 const roomId = process.argv[2];
 const outDir = process.argv[3] ?? "out";
@@ -26,8 +26,13 @@ const { data: renders } = await db.from("renders").select("*").eq("room_id", roo
 const { data: ledger } = await db.from("ledger").select("*").eq("room_id", roomId).throwOnError();
 const byId = new Map((renders ?? []).map((r: any) => [r.message_id, r]));
 
+// Images are inlined; 3D meshes stay as hosted URLs (if they cannot load, the stage stands the image up instead).
 const stageMembers = await Promise.all(
-  (members ?? []).map(async (m: any) => ({ id: m.id, name: m.name, personaUrl: await fetchData(m.persona_url), awayUrl: await fetchData(m.persona_away_url), present: false })),
+  (members ?? []).map(async (m: any) => {
+    const figure: Record<string, { img: string | null; glb: string | null }> = {};
+    for (const [pose, a] of Object.entries<any>(m.figure ?? {})) figure[pose] = { img: await fetchData(a?.img ?? null), glb: a?.glb ?? null };
+    return { id: m.id, name: m.name, figure, personaUrl: Object.keys(figure).length ? null : await fetchData(m.persona_url), present: m.name !== "Jay" && !m.is_seed ? true : m.name !== "Jay" };
+  }),
 );
 const items: PerformItem[] = [];
 for (const m of messages ?? []) {
@@ -45,6 +50,7 @@ for (const m of messages ?? []) {
     envelope: r?.envelope ?? [],
     durationMs: r?.duration_ms ?? 0,
     flags: r?.flags ?? [],
+    reactions: (r?.reactions ?? []).map((x: any) => ({ memberId: x.member_id, pose: x.pose, look: x.look })),
     readback: (r?.attempts ?? []).map((a: any) => ({ score: Number(a.similarity ?? 0), heard: String(a.heard ?? a.error ?? "") })),
   });
 }

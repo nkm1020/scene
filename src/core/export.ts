@@ -2,13 +2,13 @@
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import type { PerformItem, StageMember } from "../stage/engine";
+import type { PerformItem, StageMember } from "../stage3d/engine";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export async function bundleReplayScript(): Promise<string> {
   const out = await build({
-    entryPoints: [path.join(here, "../stage/replay-entry.ts")],
+    entryPoints: [path.join(here, "../stage3d/replay-entry.ts")],
     bundle: true,
     format: "iife",
     target: "es2020",
@@ -20,25 +20,22 @@ export async function bundleReplayScript(): Promise<string> {
 }
 
 const PAGE_CSS = `
-*{box-sizing:border-box}html,body{margin:0;height:100%;background:#02040a;color:#e9f6ff;font-family:ui-sans-serif,system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif}
-#app{display:flex;gap:28px;justify-content:center;align-items:flex-start;padding:24px;min-height:100%;flex-wrap:wrap}
-.rp-phone{width:min(400px,100%);height:min(820px,calc(100vh - 48px));display:flex;flex-direction:column;border-radius:34px;overflow:hidden;border:1px solid rgba(127,227,255,.25);box-shadow:0 0 60px rgba(58,168,255,.15);background:#05070f}
-.rp-top{padding:16px 18px 10px;border-bottom:1px solid rgba(127,227,255,.12)}
-.rp-room{font-weight:700;letter-spacing:.02em}.rp-sub{font-size:12px;color:#8aa3bf;margin-top:2px}
-.rp-stage{flex:1;position:relative;min-height:0}
-.rp-bar{height:3px;background:rgba(127,227,255,.12)}.rp-fill{height:100%;width:0;background:#7fe3ff;transition:width .4s}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#d9d1c4;color:#1b1815;font-family:"Hanken Grotesk",ui-sans-serif,system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;font-size:16px;line-height:1.5}
+#app{display:flex;gap:32px;justify-content:center;align-items:flex-start;padding:24px;flex-wrap:wrap}
+.rp-phone{width:min(400px,100%);height:min(820px,calc(100vh - 48px));display:flex;flex-direction:column;border-radius:32px;overflow:hidden;background:#fff}
+.rp-top{padding:16px 18px 12px}.rp-room{font-weight:700;font-size:18px}.rp-sub{font-size:14px;color:#6b6259}
+.rp-stage{flex:1;position:relative;min-height:0}.rp-stage>.s3-root{position:absolute;inset:0}
+.rp-bar{height:4px;background:#ebe6de}.rp-fill{height:100%;width:0;background:#2747d6;transition:width .4s}
 .rp-controls{display:flex;gap:10px;align-items:center;justify-content:center;padding:14px}
-.rp-controls button{font:inherit;color:#e9f6ff;background:rgba(127,227,255,.08);border:1px solid rgba(127,227,255,.3);border-radius:999px;padding:10px 14px;cursor:pointer}
-.rp-controls .rp-play{background:#7fe3ff;color:#03111d;font-weight:700;border:none;padding:12px 18px}
-.rp-side{width:min(460px,100%);font-size:13px}
-.rp-side h3{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#7fe3ff;margin:18px 0 8px}
-.rp-note{color:#8aa3bf;margin:4px 0}
-.rp-log{white-space:pre-wrap;background:#070c18;border:1px solid rgba(127,227,255,.15);border-radius:10px;padding:10px;font-size:11.5px;color:#bfe9ff}
-.rp-lines{padding-left:22px;margin:10px 0}.rp-lines li{padding:4px 0;color:#c7d6e6}.rp-lines li.on{color:#fff}.rp-lines li.on b{color:#7fe3ff}
-.rp-lines .t{margin-left:4px}.rp-lines .meta{display:block;font-size:11px;color:#6f86a3}
-.rp-lines .rej{display:block;font-size:11px;color:#ffb27a}
-.rp-rec{border-collapse:collapse;width:100%}.rp-rec td,.rp-rec th{border-bottom:1px solid rgba(127,227,255,.12);padding:5px 6px;text-align:left;font-variant-numeric:tabular-nums}
-.rp-rec th{color:#8aa3bf;font-weight:500}
+.rp-controls button{font:inherit;border:none;cursor:pointer;border-radius:999px;padding:12px 16px;background:#ebe6de;color:#1b1815;font-weight:600}
+.rp-controls .rp-play{background:#1b1815;color:#fff;font-weight:700;padding:13px 22px}
+.rp-side{width:min(520px,100%);background:#fff;border-radius:24px;padding:24px}
+.rp-side h2{font-size:20px;margin:18px 0 8px;letter-spacing:-.01em}.rp-side h2:first-child{margin-top:0}
+.rp-note{color:#4a433c;margin:6px 0}
+.rp-log{white-space:pre-wrap;background:#ebe6de;border-radius:12px;padding:12px;font:13px/1.5 ui-sans-serif,system-ui,sans-serif}
+.rp-lines{padding-left:22px;margin:8px 0}.rp-lines li{padding:6px 0}.rp-lines li.on b{color:#2747d6}
+.rp-lines .meta{display:block;font-size:13px;color:#6b6259}.rp-lines .rej{display:block;font-size:13px;color:#a3360f}
+.rp-rec{border-collapse:collapse;width:100%}.rp-rec td,.rp-rec th{padding:6px;text-align:left;font-variant-numeric:tabular-nums}.rp-rec tr:nth-child(even){background:#f3f0eb}.rp-rec th{color:#6b6259;font-weight:500}
 `;
 
 export interface ReplayPayload {
@@ -53,7 +50,7 @@ export async function buildReplayHtml(payload: ReplayPayload): Promise<string> {
   const script = await bundleReplayScript();
   const data = JSON.stringify({ ...payload, generatedAt: new Date().toISOString() }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Scene replay</title><style>${PAGE_CSS}</style></head><body><div id="app"></div>
+<title>Scene replay</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"><style>${PAGE_CSS}</style></head><body><div id="app"></div>
 <script>window.__SCENE__=${data};</script><script>${script}</script></body></html>`;
 }
 
