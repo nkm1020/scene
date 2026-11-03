@@ -24,37 +24,36 @@ export default function Home() {
         <HeroStage />
       </div>
       <div className="home-inner">
-        <div className="eyebrow">Scene</div>
-        <h1>
-          Text bubbles are a layout for screens.
-          <br />
-          <span>Glasses don&apos;t have one.</span>
-        </h1>
+        <div className="wordmark">Scene</div>
+        <h1>Your group chat, performed.</h1>
         <p className="lede">
-          Scene is the next layout for chat. Your friends sit around a table as holograms and speak their messages in their own voices — exactly what they typed,
-          nothing else. Missed the group chat? Press play and the room performs it.
+          Your friends stand on the table as little clay figures. Each one says what they typed, in their own voice, and nothing else. Missed the chat? Press play and
+          the table acts it out.
         </p>
         <div className="home-actions">
           <button className="primary" onClick={() => go(true)} disabled={!!busy}>
             {busy === "demo" ? "Opening…" : "Open the demo room"}
           </button>
           <button className="ghost" onClick={() => go(false)} disabled={!!busy}>
-            {busy === "new" ? "Creating…" : "Start a new room"}
+            {busy === "new" ? "Creating…" : "Start a room"}
           </button>
         </div>
         {err && <p className="err">{err}</p>}
         <ul className="how">
           <li>
-            <b>Muse Voice Transcribe</b> turns what you say into the message, checks your voice enrollment, and reads back every synthesized line before it plays.
+            <b>Sculpted by Meta models</b>
+            Three words. Muse Image sculpts a clay you and six expressions, SAM 3.1 cuts each one out, SAM 3D turns them into figures.
           </li>
           <li>
-            <b>Muse Spark 1.3</b> directs missed conversations — emotion, gesture, camera, timing — and can&apos;t change a word: its output has no text field.
+            <b>Directed by Muse Spark</b>
+            Spark reads the whole conversation and directs the table: who speaks how, who laughs, who wakes up when their name comes up. It cannot change a word.
           </li>
           <li>
-            <b>Muse Image + SAM 3.1</b> draw your stylized persona and cut it out for the hologram.
+            <b>Checked by Muse Voice Transcribe</b>
+            It turns what you say into the message, and listens to every line your figure speaks before it plays.
           </li>
         </ul>
-        <p className="fine">No login. Demo rooms are private copies. Voice synthesis: Qwen3-TTS (Apache 2.0), self-hosted.</p>
+        <p className="fine">No login. Demo rooms are private copies. Voices: Qwen3-TTS, self-hosted.</p>
       </div>
     </main>
   );

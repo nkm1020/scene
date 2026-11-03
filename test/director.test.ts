@@ -90,3 +90,42 @@ describe("director fallback", () => {
     expect(validateDirections(msgs, { directions: run.directions }).ok).toBe(true);
   });
 });
+
+describe("reactions (D5)", () => {
+  const roster = [
+    { member_id: "sam", name: "Sam", present: true },
+    { member_id: "mina", name: "Mina", present: true },
+    { member_id: "jay", name: "Jay", present: false },
+  ];
+  const three = SEED_MESSAGES.slice(0, 3); // sam, mina, sam
+  const base = () => ({
+    directions: three.map((m) => ({
+      message_id: m.id,
+      emotion: "neutral",
+      gesture: "none",
+      camera: "room",
+      pause_ms: 300,
+      reactions: roster.filter((r) => r.member_id !== m.sender_id).map((r) => ({ member_id: r.member_id, pose: "neutral", look: "speaker" })),
+    })),
+  });
+  it("accepts reactions from listeners", () => {
+    expect(validateDirections(three, base(), roster).ok).toBe(true);
+  });
+  it("rejects the speaker reacting, unknown members, duplicates, bad poses and text in reactions", () => {
+    const o: any = base();
+    o.directions[0].reactions.push({ member_id: "sam", pose: "happy", look: "camera" });
+    o.directions[1].reactions.push({ member_id: "ghost", pose: "happy", look: "camera" });
+    o.directions[2].reactions[0].pose = "dancing";
+    o.directions[2].reactions[1].text = "Jay says hi";
+    const codes = validateDirections(three, o, roster).errors.map((e) => e.code);
+    expect(codes.filter((c) => c === "D5").length).toBeGreaterThanOrEqual(3);
+    expect(codes).toContain("D4");
+  });
+  it("rule table: absent members doze unless named", () => {
+    const d = ruleDirection({ id: "x", sender_id: "sam", text: "DO NOT tell Jay" }, roster);
+    expect(d.reactions?.find((r) => r.member_id === "jay")).toEqual({ member_id: "jay", pose: "surprised", look: "speaker" });
+    const d2 = ruleDirection({ id: "y", sender_id: "sam", text: "everyone hide in the kitchen" }, roster);
+    expect(d2.reactions?.find((r) => r.member_id === "jay")?.pose).toBe("away");
+    expect(d2.reactions?.find((r) => r.member_id === "mina")?.look).toBe("speaker");
+  });
+});

@@ -271,8 +271,8 @@ export class Stage {
   private camera: THREE.PerspectiveCamera;
   private camPos = new THREE.Vector3();
   private camTargetPos = new THREE.Vector3();
-  private look = new THREE.Vector3(0, 0.08, -0.12);
-  private lookTarget = new THREE.Vector3(0, 0.08, -0.12);
+  private look = new THREE.Vector3(0, 0.12, -0.22);
+  private lookTarget = new THREE.Vector3(0, 0.12, -0.22);
   private figures = new Map<string, Figure>();
   private selfFigure: Figure | null = null;
   private caption: HTMLDivElement;
@@ -361,8 +361,8 @@ export class Stage {
     const h = this.root.clientHeight || 640;
     const aspect = w / h;
     // Look down at the table from the viewer's seat; portrait screens sit further back and higher.
-    const dist = aspect >= 1 ? 2.25 : 2.1 + (1 - aspect) * 1.5;
-    return new THREE.Vector3(0, dist * 0.62, dist);
+    const dist = aspect >= 1 ? 1.7 : 1.7 + (1 - aspect) * 1.7;
+    return new THREE.Vector3(0, dist * 0.82, dist * 0.92);
   }
 
   private resize() {
@@ -642,7 +642,7 @@ export class Stage {
     const home = this.homeCamera();
     if (!f || camera !== "close") {
       this.camTargetPos.copy(home);
-      this.lookTarget.set(0, 0.08, -0.12);
+      this.lookTarget.set(0, 0.12, -0.22);
       return;
     }
     const at = f.target.clone();

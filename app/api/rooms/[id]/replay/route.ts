@@ -15,6 +15,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await assertRoomOp(id, "director.spark", 60);
     const body = await req.json().catch(() => ({}));
     const afterSeq = Number(body.afterSeq ?? 0);
+    const present = new Set<string>(Array.isArray(body.present) ? body.present.map(String) : []);
+    const { data: roomMembers } = await db().from("members").select("id, name").eq("room_id", id);
+    const roster = (roomMembers ?? []).map((m) => ({ member_id: m.id, name: m.name, present: present.has(m.id) }));
     const { data: msgs, error } = await db()
       .from("messages")
       .select("id, member_id, seq, text, members(name)")
@@ -41,11 +44,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })();
     const run = await directSegment(
       segment.map((m: any) => ({ id: m.id, sender_id: m.member_id, sender_name: m.members?.name, text: m.text })),
-      { ledger, reasoningEffort: "minimal" },
+      { ledger, reasoningEffort: "minimal", roster },
     );
     await Promise.all(
       run.directions.map((d) =>
-        db().from("renders").update({ emotion: d.emotion, gesture: d.gesture, camera: d.camera, pause_ms: d.pause_ms, direction_source: run.source }).eq("message_id", d.message_id),
+        db()
+          .from("renders")
+          .update({ emotion: d.emotion, gesture: d.gesture, camera: d.camera, pause_ms: d.pause_ms, reactions: d.reactions ?? null, direction_source: run.source })
+          .eq("message_id", d.message_id),
       ),
     );
     await renderAll;

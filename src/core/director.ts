@@ -8,17 +8,24 @@ import { sparkJSON } from "./meta";
 import type { Ledger } from "./ledger";
 
 export * from "./rules";
-import { EMOTIONS, GESTURES, CAMERAS, ruleDirections, type ChatMessage, type Direction, type ValidationError } from "./rules";
+import { EMOTIONS, GESTURES, CAMERAS, POSES, LOOKS, ruleDirections, type ChatMessage, type Direction, type ValidationError, type RosterMember } from "./rules";
 
 export const MAX_SEGMENT = 40;
 export const MAX_ATTEMPTS = 3;
-const ALLOWED_KEYS = new Set(["message_id", "emotion", "gesture", "camera", "pause_ms"]);
+const ALLOWED_KEYS = new Set(["message_id", "emotion", "gesture", "camera", "pause_ms", "reactions"]);
+const REACTION_KEYS = new Set(["member_id", "pose", "look"]);
 
 // ───────────────────────── validator (fixed checkpoint) ─────────────────────────
 
-export function validateDirections(messages: ChatMessage[], output: unknown): { ok: boolean; errors: ValidationError[]; directions: Direction[] } {
+export function validateDirections(
+  messages: ChatMessage[],
+  output: unknown,
+  roster: RosterMember[] = [],
+): { ok: boolean; errors: ValidationError[]; directions: Direction[] } {
   const errors: ValidationError[] = [];
   const ids = messages.map((m) => m.id);
+  const senderOf = new Map(messages.map((m) => [m.id, m.sender_id]));
+  const memberIds = new Set(roster.map((r) => r.member_id));
   if (messages.length > MAX_SEGMENT) {
     errors.push({ code: "D3", message: `segment has ${messages.length} messages, max ${MAX_SEGMENT}`, fix_hint: "split the segment" });
   }
@@ -31,12 +38,16 @@ export function validateDirections(messages: ChatMessage[], output: unknown): { 
     if (k !== "directions") errors.push({ code: "D4", message: `unexpected top-level key "${k}"`, fix_hint: "only the directions array is allowed" });
   }
   const dirs = root.directions as any[];
-  // D4: no extra keys (no text channel), per item
+  // D4: no extra keys anywhere (no text channel)
   dirs.forEach((d) => {
     if (!d || typeof d !== "object") return;
     for (const k of Object.keys(d)) {
-      if (!ALLOWED_KEYS.has(k)) {
-        errors.push({ code: "D4", message_id: d.message_id, message: `forbidden key "${k}" (directions carry no text)`, fix_hint: `remove "${k}"; only ${[...ALLOWED_KEYS].join(", ")}` });
+      if (!ALLOWED_KEYS.has(k)) errors.push({ code: "D4", message_id: d.message_id, message: `forbidden key "${k}" (directions carry no text)`, fix_hint: `remove "${k}"; only ${[...ALLOWED_KEYS].join(", ")}` });
+    }
+    for (const r of Array.isArray(d.reactions) ? d.reactions : []) {
+      if (!r || typeof r !== "object") continue;
+      for (const k of Object.keys(r)) {
+        if (!REACTION_KEYS.has(k)) errors.push({ code: "D4", message_id: d.message_id, message: `forbidden reaction key "${k}"`, fix_hint: "reactions carry member_id, pose, look only" });
       }
     }
   });
@@ -65,45 +76,83 @@ export function validateDirections(messages: ChatMessage[], output: unknown): { 
     if (!CAMERAS.includes(d.camera)) errors.push({ code: "D2", message_id: d.message_id, message: `camera "${d.camera}" not allowed`, fix_hint: CAMERAS.join("|") });
     if (!Number.isInteger(d.pause_ms) || d.pause_ms < 0 || d.pause_ms > 1500) errors.push({ code: "D2", message_id: d.message_id, message: `pause_ms ${d.pause_ms} out of range`, fix_hint: "integer 0..1500" });
   });
+  // D5: reactions name real listeners (not the speaker), once each, with allowed pose/look
+  dirs.forEach((d) => {
+    if (!d || typeof d !== "object" || d.reactions === undefined) return;
+    if (!Array.isArray(d.reactions)) {
+      errors.push({ code: "D5", message_id: d.message_id, message: "reactions must be an array", fix_hint: "[] or a list of {member_id, pose, look}" });
+      return;
+    }
+    const speaker = senderOf.get(d.message_id);
+    const once = new Set<string>();
+    for (const r of d.reactions) {
+      if (!r || typeof r !== "object") continue;
+      if (roster.length && !memberIds.has(r.member_id)) errors.push({ code: "D5", message_id: d.message_id, message: `reaction for unknown member ${r.member_id}`, fix_hint: "use roster member_ids" });
+      if (r.member_id === speaker) errors.push({ code: "D5", message_id: d.message_id, message: "the speaker cannot react to their own line", fix_hint: "react with listeners only" });
+      if (once.has(r.member_id)) errors.push({ code: "D5", message_id: d.message_id, message: `two reactions for ${r.member_id}`, fix_hint: "one reaction per listener" });
+      once.add(r.member_id);
+      if (!POSES.includes(r.pose)) errors.push({ code: "D5", message_id: d.message_id, message: `pose "${r.pose}" not allowed`, fix_hint: POSES.join("|") });
+      if (!LOOKS.includes(r.look)) errors.push({ code: "D5", message_id: d.message_id, message: `look "${r.look}" not allowed`, fix_hint: LOOKS.join("|") });
+    }
+  });
   const ok = errors.length === 0;
   return { ok, errors, directions: ok ? (dirs as Direction[]) : [] };
 }
 
 // ───────────────────────── Spark director ─────────────────────────
 
-export const DIRECTIONS_SCHEMA = {
-  name: "scene_directions",
-  schema: {
+/** JSON schema for Spark's structured output. No field can hold text; member ids are an enum of the roster. */
+export function directionsSchema(roster: RosterMember[]) {
+  const reaction = {
     type: "object",
     additionalProperties: false,
-    required: ["directions"],
+    required: ["member_id", "pose", "look"],
     properties: {
-      directions: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["message_id", "emotion", "gesture", "camera", "pause_ms"],
-          properties: {
-            message_id: { type: "string" },
-            emotion: { type: "string", enum: [...EMOTIONS] },
-            gesture: { type: "string", enum: [...GESTURES] },
-            camera: { type: "string", enum: [...CAMERAS] },
-            pause_ms: { type: "integer", minimum: 0, maximum: 1500 },
+      member_id: roster.length ? { type: "string", enum: roster.map((r) => r.member_id) } : { type: "string" },
+      pose: { type: "string", enum: [...POSES] },
+      look: { type: "string", enum: [...LOOKS] },
+    },
+  };
+  return {
+    name: "scene_directions",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["directions"],
+      properties: {
+        directions: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["message_id", "emotion", "gesture", "camera", "pause_ms", "reactions"],
+            properties: {
+              message_id: { type: "string" },
+              emotion: { type: "string", enum: [...EMOTIONS] },
+              gesture: { type: "string", enum: [...GESTURES] },
+              camera: { type: "string", enum: [...CAMERAS] },
+              pause_ms: { type: "integer", minimum: 0, maximum: 1500 },
+              reactions: { type: "array", items: reaction },
+            },
           },
         },
       },
     },
-  },
-} as const;
+  };
+}
+export const DIRECTIONS_SCHEMA = directionsSchema([]);
 
-const SYSTEM = `You are the stage director for Scene, a group chat where each friend's persona performs their own messages aloud.
-You receive a missed segment of a group chat. For EVERY message, in the original order, choose how the sender's persona performs it:
-- emotion: one of ${EMOTIONS.join(", ")} (read the whole conversation: irony, running jokes, who is reacting to whom)
-- gesture: one of ${GESTURES.join(", ")}
+const SYSTEM = `You are the stage director for Scene. Friends in a group chat are clay figurines on a table; each figurine performs its owner's messages aloud.
+You receive the roster (who is at the table, and who is connected right now) and a missed segment of the chat.
+For EVERY message, in the original order, direct the whole table:
+- emotion of the speaker: one of ${EMOTIONS.join(", ")}. Read the whole conversation: irony, running jokes, who is teasing whom.
+- gesture of the speaker: one of ${GESTURES.join(", ")}
 - camera: "close" for punchlines, reveals and strong reactions; otherwise "room"
-- pause_ms: silence BEFORE this message (0-1500). Use longer pauses for comic timing and awkward silences.
-You never write, quote, translate, summarize or change any message text. Output only message_id and the four fields.`;
+- pause_ms: silence BEFORE this message (0-1500). Longer pauses for comic timing and awkward silences.
+- reactions: one entry for EACH other roster member (never the speaker): their pose (${POSES.join(", ")}) and where they look (${LOOKS.join(", ")}).
+  Members who are not connected are dozing: keep them "away" + "down", UNLESS the line is about them, addressed to them, or would obviously wake them; then pick the pose they would have and look at the speaker.
+  React to what the line means to that person (the one being kept out of a secret is confused; the one in on the joke laughs).
+You never write, quote, translate, summarize or change any message text. Output only ids and the fields above.`;
 
 export interface DirectorRun {
   directions: Direction[];
@@ -115,12 +164,12 @@ export interface DirectorRun {
 
 export async function directSegment(
   messages: ChatMessage[],
-  opts: { ledger?: Ledger; reasoningEffort?: "minimal" | "low" | "medium"; tamper?: (out: any, attempt: number) => any } = {},
+  opts: { ledger?: Ledger; reasoningEffort?: "minimal" | "low" | "medium"; roster?: RosterMember[]; tamper?: (out: any, attempt: number) => any } = {},
 ): Promise<DirectorRun> {
+  const roster = opts.roster ?? [];
   const log: DirectorRun["log"] = [];
   if (messages.length === 0) return { directions: [], source: "rules", attempts: 0, log, flags: [] };
   if (messages.length > MAX_SEGMENT) {
-    // D3: split into chunks of MAX_SEGMENT and direct each
     const runs: DirectorRun[] = [];
     for (let i = 0; i < messages.length; i += MAX_SEGMENT) runs.push(await directSegment(messages.slice(i, i + MAX_SEGMENT), opts));
     return {
@@ -131,16 +180,17 @@ export async function directSegment(
       flags: runs.flatMap((r) => r.flags),
     };
   }
-  const transcript = messages.map((m) => ({ message_id: m.id, sender: m.sender_name ?? m.sender_id, text: m.text }));
+  const transcript = messages.map((m) => ({ message_id: m.id, sender: roster.find((r) => r.member_id === m.sender_id)?.name ?? m.sender_name ?? m.sender_id, sender_id: m.sender_id, text: m.text }));
   const chat: { role: "system" | "user" | "assistant"; content: string }[] = [
     { role: "system", content: SYSTEM },
-    { role: "user", content: JSON.stringify({ messages: transcript }) },
+    { role: "user", content: JSON.stringify({ roster, messages: transcript }) },
   ];
+  const schema = directionsSchema(roster);
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let out: any = null;
     let ms = 0, inputTokens = 0, outputTokens = 0, reasoningTokens = 0;
     try {
-      const r = await sparkJSON(chat as any, DIRECTIONS_SCHEMA as any, { reasoningEffort: opts.reasoningEffort ?? "low", maxTokens: 6000, op: "director.spark", ledger: opts.ledger });
+      const r = await sparkJSON(chat as any, schema as any, { reasoningEffort: opts.reasoningEffort ?? "low", maxTokens: 8000, op: "director.spark", ledger: opts.ledger });
       out = r.data;
       ms = r.ms;
       inputTokens = r.usage.input;
@@ -151,11 +201,11 @@ export async function directSegment(
       continue;
     }
     if (opts.tamper) out = opts.tamper(out, attempt);
-    const v = validateDirections(messages, out);
+    const v = validateDirections(messages, out, roster);
     log.push({ attempt, ok: v.ok, errors: v.errors, ms, inputTokens, outputTokens, reasoningTokens });
     if (v.ok) return { directions: v.directions, source: "spark", attempts: attempt, log, flags: [] };
     chat.push({ role: "assistant", content: JSON.stringify(out) });
     chat.push({ role: "user", content: `Your output failed validation. Fix every error and return the full directions again.\n${JSON.stringify(v.errors)}` });
   }
-  return { directions: ruleDirections(messages), source: "rules", attempts: MAX_ATTEMPTS, log, flags: ["director_fallback"] };
+  return { directions: ruleDirections(messages, roster), source: "rules", attempts: MAX_ATTEMPTS, log, flags: ["director_fallback"] };
 }

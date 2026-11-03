@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createStage, type Stage, type PerformItem, type StageMember } from "@/stage/engine";
+import { createStage, type Stage, type PerformItem, type StageMember, type FigureAssets } from "@/stage3d/engine";
+import { ruleDirection } from "@/core/rules";
 import { browserDb } from "./supabase";
 import { api, loadCreds, saveCreds, lastSeen, setLastSeen, type Creds } from "./api";
 import { Recorder } from "./audio";
 import { ENROLL_SENTENCES } from "@/core/seed";
 
-type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
+type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; figure?: FigureAssets | null; figure_status?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
 type Message = { id: string; room_id: string; member_id: string; seq: number; text: string; created_at: string };
 type Render = {
   message_id: string;
@@ -23,6 +24,7 @@ type Render = {
   direction_source: string;
   similarity: number | null;
   heard: string | null;
+  reactions?: { member_id: string; pose: any; look: any }[] | null;
 };
 type RoomState = { room: { id: string; name: string; is_demo: boolean }; members: Member[]; messages: Message[]; renders: Render[] };
 
@@ -30,8 +32,15 @@ const HAIR = ["short messy black hair", "long wavy brown hair", "curly red hair"
 const OUTFIT = ["green hoodie", "denim jacket", "yellow cardigan", "black turtleneck", "striped tee", "red varsity jacket"];
 const VIBE = ["cheerful", "calm", "playful", "smug", "sleepy", "bold"];
 
-function toItem(m: Message, r: Render | undefined): PerformItem {
+function toItem(m: Message, r: Render | undefined, roster?: { member_id: string; name: string; present: boolean }[]): PerformItem {
+  // Reactions: the director's (Spark) when stored, else the rule table with live presence.
+  const reactions = (r?.reactions ?? (roster ? ruleDirection({ id: m.id, sender_id: m.member_id, text: m.text }, roster).reactions : []) ?? []).map((x) => ({
+    memberId: x.member_id,
+    pose: x.pose,
+    look: x.look,
+  }));
   return {
+    reactions,
     messageId: m.id,
     memberId: m.member_id,
     text: m.text,
@@ -71,6 +80,9 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   modeRef.current = mode;
 
   const me = useMemo(() => state?.members.find((m) => m.id === creds?.memberId) ?? null, [state, creds]);
+  const presentRef = useRef(present);
+  presentRef.current = present;
+  const roster = () => (stateRef.current?.members ?? []).map((m) => ({ member_id: m.id, name: m.name, present: presentRef.current.has(m.id) }));
 
   const reload = useCallback(async () => {
     const s = await api<RoomState>(`/api/rooms/${roomId}`);
@@ -88,7 +100,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
 
   // Stage
   const stageMembers: StageMember[] = useMemo(
-    () => (state?.members ?? []).map((m) => ({ id: m.id, name: m.name, personaUrl: m.persona_url, awayUrl: m.persona_away_url ?? null, present: present.has(m.id) })),
+    () => (state?.members ?? []).map((m) => ({ id: m.id, name: m.name, personaUrl: m.persona_url, awayUrl: m.persona_away_url ?? null, figure: m.figure ?? null, present: present.has(m.id) })),
     [state?.members, present],
   );
   useEffect(() => {
@@ -136,7 +148,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         if (early) {
           earlyRenders.current.delete(m.id);
           if (modeRef.current === "idle") {
-            liveQueue.current.push(toItem(m, early));
+            liveQueue.current.push(toItem(m, early, roster()));
             void pump();
           }
         } else if (m.member_id !== creds.memberId) stage.current?.setWaiting(m.member_id, true);
@@ -157,7 +169,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         if (modeRef.current !== "idle") return; // replay will cover it
         // Your own line plays too, in the small mirror: you hear what your friends hear.
         stage.current?.setWaiting(msg.member_id, false);
-        liveQueue.current.push(toItem(msg, r));
+        liveQueue.current.push(toItem(msg, r, roster()));
         void pump();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `room_id=eq.${roomId}` }, () => {
@@ -194,7 +206,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     setMode("directing");
     setDirectorNote(`Muse Spark is directing ${Math.min(segment.length, 40)} lines…`);
     try {
-      const res = await api(`/api/rooms/${roomId}/replay`, { method: "POST", json: { afterSeq: seen } });
+      const res = await api(`/api/rooms/${roomId}/replay`, { method: "POST", json: { afterSeq: seen, present: [...present] } });
       const last = res.log?.at(-1);
       setDirectorNote(
         res.source === "spark"
@@ -203,7 +215,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       );
       const s = await reload();
       const byId = new Map(s.renders.map((r) => [r.message_id, r]));
-      const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id)));
+      const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id), roster()));
       setMode("replaying");
       const ctl = stage.current.play(items, { speed, onItem: (i) => setProgress({ i: i + 1, n: items.length }) });
       (window as any).__sceneCtl = ctl;
@@ -515,7 +527,7 @@ function Join({ roomId, roomName, onDone }: { roomId: string; roomName: string; 
   return (
     <div className="join">
       <div className="join-card">
-        <div className="eyebrow">Scene · {roomName}</div>
+        <div className="room-tag">Scene · {roomName}</div>
         {step === "name" && (
           <>
             <h1>Take a seat.</h1>
@@ -564,42 +576,55 @@ function Pick({ label, options, value, set, busy }: { label: string; options: st
   );
 }
 
+function FigurePreview({ figure, name }: { figure: FigureAssets; name: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!host.current) return;
+    const st = createStage(host.current, { members: [{ id: "me", name, figure, present: true }], viewerId: null, quiet: true, showMark: false });
+    return () => st.destroy();
+  }, [figure, name]);
+  return <div className="figure-preview" ref={host} />;
+}
+
 function PersonaStep({ creds, onNext, compact }: { creds: Creds; onNext: () => void; compact?: boolean }) {
   const [hair, setHair] = useState(HAIR[0]);
   const [outfit, setOutfit] = useState(OUTFIT[0]);
   const [vibe, setVibe] = useState(VIBE[0]);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState("");
-  const [result, setResult] = useState<{ personaUrl: string; ms: number; usd: number } | null>(null);
+  const [result, setResult] = useState<{ neutral: { img: string; glb: string | null }; ms: number; usd: number; threeD: boolean } | null>(null);
   const [tries, setTries] = useState(0);
   const [err, setErr] = useState("");
 
   const make = async () => {
     setBusy(true);
     setErr("");
-    setPhase("Muse Image is drawing your persona…");
-    const t = setTimeout(() => setPhase("SAM 3.1 is cutting it out…"), 9000);
+    setPhase("Muse Image is sculpting your figurine");
+    const t1 = setTimeout(() => setPhase("SAM 3.1 is cutting it out"), 11000);
+    const t2 = setTimeout(() => setPhase("SAM 3D is lifting it into 3D"), 15000);
     try {
-      const r = await api("/api/persona", { method: "POST", json: { ...creds, hair, outfit, vibe } });
+      const r = await api("/api/figure", { method: "POST", json: { ...creds, hair, outfit, vibe } });
       setResult(r);
       setTries((n) => n + 1);
     } catch (e: any) {
       setErr(e.message);
     } finally {
-      clearTimeout(t);
+      clearTimeout(t1);
+      clearTimeout(t2);
       setBusy(false);
       setPhase("");
     }
   };
   return (
     <>
-      {!compact && <h1>Your persona</h1>}
-      <p className="muted">Three words. Muse Image draws a stylized you; SAM 3.1 cuts it out for the hologram. Never photoreal.</p>
+      {!compact && <h1>Your figurine</h1>}
+      <p className="muted">Pick three things. Muse Image sculpts a clay you, SAM 3.1 cuts it out, and SAM 3D turns it into a figure that stands on the table. Six expressions follow in the background.</p>
       {result ? (
         <div className="persona-result">
-          <img src={result.personaUrl} alt="your persona" />
+          <FigurePreview figure={{ neutral: result.neutral }} name="You" />
           <p className="fine">
-            {(result.ms / 1000).toFixed(1)} s · ${result.usd.toFixed(4)}
+            {(result.ms / 1000).toFixed(0)} s · ${result.usd.toFixed(3)}
+            {result.threeD ? " · 3D" : " · picture only for now"}
           </p>
         </div>
       ) : (
@@ -609,7 +634,7 @@ function PersonaStep({ creds, onNext, compact }: { creds: Creds; onNext: () => v
           <Pick label="Vibe" options={VIBE} value={vibe} set={setVibe} busy={busy} />
         </>
       )}
-      {phase && <p className="pulse muted">{phase}</p>}
+      {phase && <p className="pulse muted">{phase}…</p>}
       {err && <p className="err">{err}</p>}
       <div className="row">
         {result ? (
@@ -631,7 +656,7 @@ function PersonaStep({ creds, onNext, compact }: { creds: Creds; onNext: () => v
               </button>
             )}
             <button className="primary" onClick={make} disabled={busy}>
-              {busy ? "Drawing…" : "Create persona"}
+              {busy ? "Sculpting…" : "Make my figurine"}
             </button>
           </>
         )}
