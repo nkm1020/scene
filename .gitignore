@@ -20,3 +20,4 @@ next-env.d.ts
 spikes/meta/*.ts.bak
 spikes/meta/audio/
 .next-build/
+public/seed/figures/**/*.png

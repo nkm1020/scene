@@ -6,6 +6,7 @@ export type Model =
   | "muse-image-1.0"
   | "sam-3.1"
   | "muse-voice-transcribe-1.0"
+  | "sam-3d-objects"
   | "qwen3-tts";
 
 export interface LedgerEntry {
@@ -28,6 +29,8 @@ export const PRICE = {
   imagePerImage: 0.01,
   samPerImage: 2.5 / 1000,
   vtPerHour: 0.18,
+  // Meta SAM 3D Objects, hosted by fal.ai (fal-ai/sam-3/3d-objects): $0.02 per reconstruction.
+  sam3dPerObject: 0.02,
   // Modal L4 ≈ $0.80/h; billed per GPU-second of generation.
   ttsGpuPerHour: 0.8,
 } as const;
