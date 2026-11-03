@@ -63,15 +63,15 @@ async function main() {
   // 1) Personas
   log("\n[1/4] Personas: Muse Image draws, SAM 3.1 cuts out; Muse Image edits an away pose (head bowed) for presence");
   const personas = await pool(SEED_MEMBERS, 3, async (m) => {
-    const file = path.join(OUT, "personas", `${m.id}.png`);
-    if (flag("reuse-personas") && existsSync(`public/seed/${m.id}.png`)) {
-      log(`  ${m.name}: reused public/seed/${m.id}.png`);
-      return { png: readFileSync(`public/seed/${m.id}.png`), away: existsSync(`public/seed/${m.id}-away.png`) ? readFileSync(`public/seed/${m.id}-away.png`) : null };
+    const file = path.join(OUT, "personas", `${m.id}.webp`);
+    if (flag("reuse-personas") && existsSync(`public/seed/${m.id}.webp`)) {
+      log(`  ${m.name}: reused public/seed/${m.id}.webp`);
+      return { png: readFileSync(`public/seed/${m.id}.webp`), away: existsSync(`public/seed/${m.id}-away.webp`) ? readFileSync(`public/seed/${m.id}-away.webp`) : null };
     }
     const p = await createPersona(m, { ledger });
     writeFileSync(file, p.png);
     const away = await createAwayPose(p.sourceImage, { ledger }).catch((e) => (log(`  ${m.name}: away pose failed (${e.message}); CSS tilt fallback`), null));
-    if (away) writeFileSync(path.join(OUT, "personas", `${m.id}-away.png`), away.png);
+    if (away) writeFileSync(path.join(OUT, "personas", `${m.id}-away.webp`), away.png);
     log(`  ${m.name}: "${m.hair}, ${m.outfit}, ${m.vibe}" → ${p.width}×${p.height}, SAM "${p.phrase}", mask ${(p.maskCoverage * 100).toFixed(0)}%${away ? ", away pose ✓" : ""}${p.flags.length ? " " + p.flags.join(",") : ""}`);
     return { png: p.png, away: away?.png ?? null };
   });
@@ -146,8 +146,8 @@ async function main() {
   const members = SEED_MEMBERS.map((m, i) => ({
     id: m.id,
     name: m.name,
-    personaUrl: dataUrl(personas[i].png, "image/png"),
-    awayUrl: personas[i].away ? dataUrl(personas[i].away!, "image/png") : null,
+    personaUrl: dataUrl(personas[i].png, "image/webp"),
+    awayUrl: personas[i].away ? dataUrl(personas[i].away!, "image/webp") : null,
     present: m.id !== "jay", // Jay is away in the seed room: bowed until he performs a line
   }));
   const receipt = {

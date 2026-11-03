@@ -19,11 +19,11 @@ await db.from("rooms").delete().eq("id", TPL);
 await db.from("rooms").insert({ id: TPL, name: "wrong chat", is_demo: true }).throwOnError();
 const ids = new Map<string, string>();
 for (const m of SEED_MEMBERS) {
-  const path = `${TPL}/${m.id}.png`;
-  await db.storage.from("personas").upload(path, readFileSync(`public/seed/${m.id}.png`), { contentType: "image/png", upsert: true });
+  const path = `${TPL}/${m.id}.webp`;
+  await db.storage.from("personas").upload(path, readFileSync(`public/seed/${m.id}.webp`), { contentType: "image/webp", upsert: true });
   const url = db.storage.from("personas").getPublicUrl(path).data.publicUrl;
-  const awayPath = `${TPL}/${m.id}-away.png`;
-  await db.storage.from("personas").upload(awayPath, readFileSync(`public/seed/${m.id}-away.png`), { contentType: "image/png", upsert: true });
+  const awayPath = `${TPL}/${m.id}-away.webp`;
+  await db.storage.from("personas").upload(awayPath, readFileSync(`public/seed/${m.id}-away.webp`), { contentType: "image/webp", upsert: true });
   const awayUrl = db.storage.from("personas").getPublicUrl(awayPath).data.publicUrl;
   const { data } = await db.from("members").insert({ room_id: TPL, name: m.name, persona_url: url, persona_away_url: awayUrl, preset: m.preset, is_seed: true, persona_spec: { hair: m.hair, outfit: m.outfit, vibe: m.vibe } }).select("id").single().throwOnError();
   ids.set(m.id, data!.id);

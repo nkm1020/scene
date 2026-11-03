@@ -92,6 +92,8 @@ export interface StageOptions {
   members: StageMember[];
   viewerId?: string | null;
   showMark?: boolean;
+  /** No sound effects and no voice flags (landing-page preview). */
+  quiet?: boolean;
 }
 
 export interface PlayController {
@@ -132,11 +134,13 @@ export class Stage {
   private members: StageMember[];
   private audioCtx: AudioContext | null = null;
   private current: { cancelled: boolean; skip: boolean; speed: number } | null = null;
+  private quiet = false;
 
   constructor(container: HTMLElement, opts: StageOptions) {
     injectCss(container.ownerDocument);
     this.viewerId = opts.viewerId ?? null;
     this.members = opts.members;
+    this.quiet = !!opts.quiet;
     const root = document.createElement("div");
     root.className = "sc-stage";
     root.innerHTML = `<div class="sc-room"></div><div class="sc-floor"></div><div class="sc-cam"></div>
@@ -298,6 +302,7 @@ export class Stage {
   }
 
   private blip(kind: "ding" | "type", durationMs: number) {
+    if (this.quiet) return;
     const ctx = this.ctx();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -333,7 +338,7 @@ export class Stage {
     (this.caption.querySelector(".who") as HTMLElement).textContent = who;
     (this.caption.querySelector(".line") as HTMLElement).textContent = item.text;
     const flag = this.caption.querySelector(".flag") as HTMLElement;
-    flag.textContent = item.status === "captions_only" ? (item.flags?.includes("voice_disabled") ? "captions only" : "voice not verified · captions only") : "";
+    flag.textContent = this.quiet ? "" : item.status === "captions_only" ? (item.flags?.includes("voice_disabled") ? "captions only" : "voice not verified · captions only") : "";
     this.caption.classList.remove("hidden");
   }
 

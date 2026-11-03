@@ -21,7 +21,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:14px 0 6px;letter-s
 
 /* home */
 .home{min-height:100dvh;display:grid;place-items:center;padding:28px 18px;background:radial-gradient(90% 60% at 50% 110%,rgba(58,168,255,.18),transparent 60%),var(--bg)}
-.home-inner{max-width:620px}
+.home-inner{max-width:560px}
 .home h1{font-size:clamp(30px,6vw,46px);line-height:1.08;margin:14px 0 16px;letter-spacing:-.02em}
 .home h1 span{color:var(--holo)}
 .lede{font-size:17px;line-height:1.55;color:#c8d8ea}
@@ -75,3 +75,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:14px 0 6px;letter-s
 .thumb{height:56px}
 table.rec{width:100%;border-collapse:collapse;font-size:13px}table.rec td,table.rec th{text-align:left;padding:5px 4px;border-bottom:1px solid rgba(127,227,255,.1);font-variant-numeric:tabular-nums}table.rec th{color:var(--muted);font-weight:500}
 .director-note{max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
+.home{display:flex;gap:40px;align-items:center;justify-content:center;flex-wrap:wrap}
+.home-hero{width:min(380px,100%);height:min(560px,62dvh);border-radius:30px;overflow:hidden;border:1px solid var(--line);box-shadow:0 0 70px rgba(58,168,255,.18);position:relative}
+.hero-stage{position:absolute;inset:0}.hero-stage>.sc-stage{position:absolute;inset:0;min-height:0}
+@media (max-width:820px){.home{padding-top:16px}.home-hero{height:52dvh}}

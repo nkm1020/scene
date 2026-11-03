@@ -16,7 +16,7 @@ export interface PersonaSpec {
 }
 
 export interface PersonaResult {
-  png: Buffer; // transparent, cropped to the character with padding
+  png: Buffer; // transparent WebP, cropped to the character with padding
   width: number;
   height: number;
   maskCoverage: number; // 0..1 of the source frame
@@ -117,7 +117,7 @@ export async function applyAlpha(image: Buffer, alpha: Uint8Array, width: number
   const png = await sharp(rgba, { raw: { width, height, channels: 4 } })
     .extract({ left, top, width: w, height: h })
     .resize({ height: Math.min(h, 768), withoutEnlargement: true })
-    .png({ compressionLevel: 9 })
+    .webp({ quality: 88, alphaQuality: 100, effort: 5 }) // ~85% smaller than PNG, keeps alpha
     .toBuffer();
   const meta = await sharp(png).metadata();
   return { png, coverage, width: meta.width ?? w, height: meta.height ?? h };

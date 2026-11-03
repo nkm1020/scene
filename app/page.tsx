@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import HeroStage from "@/client/HeroStage";
 
 export default function Home() {
   const [busy, setBusy] = useState<string | null>(null);
@@ -19,6 +20,9 @@ export default function Home() {
   };
   return (
     <main className="home">
+      <div className="home-hero">
+        <HeroStage />
+      </div>
       <div className="home-inner">
         <div className="eyebrow">Scene</div>
         <h1>

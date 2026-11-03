@@ -18,8 +18,8 @@ export async function POST(req: Request) {
     if (!spec.hair || !spec.outfit || !spec.vibe) throw new HttpError(400, "pick hair, outfit and vibe");
     const t0 = Date.now();
     const p = await createPersona(spec, { ledger });
-    const path = `${member.room_id}/${member.id}-${Date.now()}.png`;
-    const { error } = await db().storage.from("personas").upload(path, p.png, { contentType: "image/png", upsert: true });
+    const path = `${member.room_id}/${member.id}-${Date.now()}.webp`;
+    const { error } = await db().storage.from("personas").upload(path, p.png, { contentType: "image/webp", upsert: true });
     if (error) throw error;
     const url = publicUrl("personas", path);
     await db().from("members").update({ persona_url: url, persona_away_url: null, persona_spec: spec }).eq("id", member.id).throwOnError();
@@ -28,8 +28,8 @@ export async function POST(req: Request) {
       const awayLedger = new Ledger();
       try {
         const away = await createAwayPose(p.sourceImage, { ledger: awayLedger });
-        const awayPath = path.replace(/\.png$/, "-away.png");
-        await db().storage.from("personas").upload(awayPath, away.png, { contentType: "image/png", upsert: true });
+        const awayPath = path.replace(/\.webp$/, "-away.webp");
+        await db().storage.from("personas").upload(awayPath, away.png, { contentType: "image/webp", upsert: true });
         const { data: cur } = await db().from("members").select("persona_url").eq("id", member.id).single();
         if (cur?.persona_url === url) await db().from("members").update({ persona_away_url: publicUrl("personas", awayPath) }).eq("id", member.id);
       } catch (err) {
