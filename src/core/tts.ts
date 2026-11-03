@@ -17,6 +17,17 @@ export function ttsEndpoint(): string | null {
   return url ? url.replace(/\/$/, "") : null;
 }
 
+/** A local (laptop) TTS server is slow and serial: one request at a time, long timeout. */
+export function ttsIsLocal(): boolean {
+  return /\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ttsEndpoint() ?? "");
+}
+export function ttsConcurrency(): number {
+  return Number(process.env.TTS_CONCURRENCY ?? (ttsIsLocal() ? 1 : 3));
+}
+function ttsTimeoutMs(): number {
+  return Number(process.env.TTS_TIMEOUT_MS ?? (ttsIsLocal() ? 600_000 : 90_000));
+}
+
 /**
  * Preset voices (Qwen3-TTS CustomVoice speakers) per language. Chosen by reading samples back with
  * Voice Transcribe on Nov 3: a Korean-native voice reading English garbles it (and the read-back check rejects it),
@@ -59,7 +70,7 @@ export async function synthesize(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TTS_TOKEN ?? ""}` },
     body: JSON.stringify({ text: ttsText(text), language: opts.language ?? "auto", voice, ...(opts.seed != null ? { seed: opts.seed } : {}), ...(opts.speed ? { speed: opts.speed } : {}) }),
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(ttsTimeoutMs()),
   });
   const ms = Math.round(performance.now() - t0);
   if (!res.ok) {

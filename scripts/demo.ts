@@ -17,7 +17,7 @@ import { Ledger } from "../src/core/ledger";
 import { createPersona, createAwayPose } from "../src/core/persona";
 import { directSegment, type Direction } from "../src/core/director";
 import { renderVoice, verifyEnrollment, type VoiceRender, type VoiceSpec } from "../src/core/voice";
-import { ttsEndpoint, type Voice } from "../src/core/tts";
+import { ttsEndpoint, ttsConcurrency, type Voice } from "../src/core/tts";
 import { SEED_MEMBERS, SEED_MESSAGES, ENROLL_SENTENCES } from "../src/core/seed";
 import { buildReplayHtml, dataUrl } from "../src/core/export";
 import type { PerformItem } from "../src/stage/engine";
@@ -113,7 +113,7 @@ async function main() {
 
   // 4) Voices with round trip
   log(`\n[4/4] Voices: synthesize → Voice Transcribe reads it back → plays only if ≥0.85 match`);
-  const renders: VoiceRender[] = await pool(SEED_MESSAGES, 3, async (m) => {
+  const renders: VoiceRender[] = await pool(SEED_MESSAGES, ttsConcurrency(), async (m) => {
     const member = SEED_MEMBERS.find((x) => x.id === m.sender_id)!;
     const voice: VoiceSpec | null = tts ? voices.get(m.sender_id) ?? { presetKey: member.preset } : null;
     const r = await renderVoice(m.text, voice, { ledger });
