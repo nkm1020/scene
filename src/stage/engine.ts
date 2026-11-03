@@ -40,7 +40,7 @@ export interface TimelineEntry {
 }
 
 const ENV_FPS = 30;
-const TABLE_Y = 68; // % of stage height (table center)
+const TABLE_Y = 64; // % of stage height (table center)
 const TABLE_H = 19; // % of stage height
 
 export function itemDuration(item: PerformItem): number {
@@ -247,7 +247,7 @@ export class Stage {
     const w = this.root.clientWidth || 360;
     const h = this.root.clientHeight || 640;
     const n = Math.max(1, this.seats.size);
-    const base = Math.min(w * (n <= 2 ? 0.5 : n === 3 ? 0.42 : n === 4 ? 0.29 : n === 5 ? 0.25 : 0.21), h * 0.4);
+    const base = Math.min(w * (n <= 2 ? 0.52 : n === 3 ? 0.46 : n === 4 ? 0.31 : n === 5 ? 0.26 : 0.22), h * 0.42);
     this.root.style.setProperty("--table-y", `${TABLE_Y}%`);
     this.root.style.setProperty("--table-h", `${TABLE_H}%`);
     const all = [...this.seats.values(), ...(this.selfSeat ? [this.selfSeat] : [])];
@@ -266,7 +266,7 @@ export class Stage {
       if (speaking && g === "lean_in") { k *= 1.06; dy += 2; }
       if (speaking && g === "step_back") { k *= 0.94; dy -= 2; }
       seat.el.style.width = `${base * seat.s}px`;
-      seat.el.style.left = `${seat.x}%`;
+      seat.el.style.left = `${speaking ? seat.x + (50 - seat.x) * 0.35 : seat.x}%`; // step toward the middle
       seat.el.style.top = `${seat.y + dy}%`;
       seat.el.style.transform = `translate(-50%,-100%) scale(${k})`;
       seat.el.style.zIndex = String(speaking ? 12 : Math.round((1 - seat.depth) * 6) + 1);

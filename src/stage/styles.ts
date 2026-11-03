@@ -57,7 +57,7 @@ export const STAGE_CSS = String.raw`
 /* speaking */
 .sc-seat.speaking{filter:brightness(1.18);z-index:5}
 .sc-seat.speaking .sc-beam{opacity:.5}.sc-seat.speaking .sc-disc{opacity:1}
-.sc-seat.speaking .sc-name{color:var(--holo)}
+.sc-seat.speaking .sc-name{opacity:0}
 .sc-seat.dimmed{filter:brightness(.55) saturate(.8)}
 .sc-seat.dimmed.absent{filter:brightness(.32) saturate(.5)}
 .sc-seat.waiting .sc-persona{animation:sc-breathe 1.6s ease-in-out infinite}
