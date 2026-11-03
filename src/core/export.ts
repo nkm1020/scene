@@ -36,6 +36,7 @@ const PAGE_CSS = `
 .rp-log{white-space:pre-wrap;background:#070c18;border:1px solid rgba(127,227,255,.15);border-radius:10px;padding:10px;font-size:11.5px;color:#bfe9ff}
 .rp-lines{padding-left:22px;margin:10px 0}.rp-lines li{padding:4px 0;color:#c7d6e6}.rp-lines li.on{color:#fff}.rp-lines li.on b{color:#7fe3ff}
 .rp-lines .t{margin-left:4px}.rp-lines .meta{display:block;font-size:11px;color:#6f86a3}
+.rp-lines .rej{display:block;font-size:11px;color:#ffb27a}
 .rp-rec{border-collapse:collapse;width:100%}.rp-rec td,.rp-rec th{border-bottom:1px solid rgba(127,227,255,.12);padding:5px 6px;text-align:left;font-variant-numeric:tabular-nums}
 .rp-rec th{color:#8aa3bf;font-weight:500}
 `;

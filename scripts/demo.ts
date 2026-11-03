@@ -140,6 +140,7 @@ async function main() {
       envelope: r.envelope,
       durationMs: r.durationMs,
       flags: r.flags,
+      readback: r.attempts.map((a) => ({ score: a.similarity, heard: a.heard || a.error || "" })),
     };
   });
   const summary = ledger.summary();

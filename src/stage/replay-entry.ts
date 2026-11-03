@@ -56,11 +56,25 @@ function main() {
     const li = el("li");
     li.dataset.i = String(i);
     const who = data.members.find((m) => m.id === it.memberId)?.name ?? it.memberId;
-    const badge = it.status === "verified" ? "✓ read-back" : it.status === "silent" ? "emoji" : it.status === "pending" ? "…" : "captions";
+    const rb = it.readback ?? [];
+    const last = rb.at(-1);
+    const badge =
+      it.status === "verified"
+        ? `✓ read-back ${last ? last.score.toFixed(2) : ""}${rb.length > 1 ? ` (try ${rb.length})` : ""}`
+        : it.status === "silent"
+          ? "emoji · no voice"
+          : it.status === "pending"
+            ? "…"
+            : "captions";
     li.innerHTML = `<b></b> <span class="t"></span><span class="meta"></span>`;
     (li.querySelector("b") as HTMLElement).textContent = who;
     (li.querySelector(".t") as HTMLElement).textContent = it.text;
     (li.querySelector(".meta") as HTMLElement).textContent = `${it.emotion} · ${it.gesture} · ${it.camera} · ${it.pauseMs}ms · ${badge}`;
+    for (const r of rb.slice(0, -1)) {
+      const rej = el("span", "rej");
+      rej.textContent = `✗ rejected ${r.score.toFixed(2)} — heard “${r.heard}”`;
+      li.append(rej);
+    }
     lines.append(li);
   });
   const rc = data.receipt;

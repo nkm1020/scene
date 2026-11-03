@@ -30,6 +30,8 @@ export interface PerformItem {
   durationMs?: number; // audio duration when verified
   status?: "verified" | "captions_only" | "silent" | "pending";
   flags?: string[];
+  /** Read-back history for display (each synthesis attempt: score and what Voice Transcribe heard). */
+  readback?: { score: number; heard: string }[];
 }
 
 export interface TimelineEntry {

@@ -45,6 +45,7 @@ for (const m of messages ?? []) {
     envelope: r?.envelope ?? [],
     durationMs: r?.duration_ms ?? 0,
     flags: r?.flags ?? [],
+    readback: (r?.attempts ?? []).map((a: any) => ({ score: Number(a.similarity ?? 0), heard: String(a.heard ?? a.error ?? "") })),
   });
 }
 const byModel: Record<string, { calls: number; usd: number; ms: number }> = {};
