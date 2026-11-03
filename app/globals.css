@@ -40,21 +40,6 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
 .mark{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px;letter-spacing:-.01em}
 .mark svg{width:22px;height:22px;flex:none}
 
-/* home */
-.home{min-height:100dvh;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);background:var(--ground)}
-.home-hero{position:relative;min-height:100dvh}
-.hero-stage{position:absolute;inset:0}.hero-stage>.s3-root{position:absolute;inset:0;min-height:0}
-.home-inner{padding:40px clamp(24px,5vw,72px);display:flex;flex-direction:column;justify-content:center}
-.wordmark{margin-bottom:auto}
-.home h1{font-size:clamp(40px,5.2vw,76px);line-height:1;letter-spacing:-.035em;margin:40px 0 20px;font-weight:600}
-.lede{font-size:clamp(17px,1.4vw,19px);line-height:1.5;max-width:520px;margin:0;color:var(--muted)}
-.home-actions{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0 40px}
-.how{list-style:none;padding:0;margin:0 0 auto;display:grid;gap:2px;max-width:560px;background:var(--surface);border-radius:var(--radius-card);overflow:hidden}
-.how li{padding:14px 18px;font-size:14px;color:var(--muted)}
-.how b{display:block;font-size:15px;font-weight:600;color:#fff}
-.home .fine{margin-top:28px}
-@media (max-width:860px){.home{grid-template-columns:1fr}.home-hero{min-height:64dvh}.home-inner{padding:28px 16px 40px}.home h1{margin-top:16px}}
-
 /* join */
 .join{min-height:100dvh;display:grid;place-items:center;padding:20px 16px;background:var(--ground)}
 .join-card{width:min(440px,100%);background:var(--surface);border-radius:var(--radius-card);padding:24px 22px}

@@ -21,3 +21,6 @@ spikes/meta/*.ts.bak
 spikes/meta/audio/
 .next-build/
 public/seed/figures/**/*.png
+
+.taste-skill/
+.impeccable/

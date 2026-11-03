@@ -131,7 +131,7 @@ const CSS = `
 .s3-cap .who{display:none}
 .s3-cap .line{font-size:18px;line-height:1.3;font-weight:500}
 .s3-cap .flag{font-size:12px;color:#5f5a52;margin-top:3px}
-.s3-mark{position:absolute;top:10px;right:12px;font-size:11px;color:#949494}
+.s3-mark{position:absolute;top:16px;right:18px;font-size:11px;color:#949494}
 .s3-name{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:500;color:#b4b4b4;background:#111;border-radius:999px;padding:3px 9px 4px;white-space:nowrap;pointer-events:none;transition:opacity .3s,color .2s}
 .s3-name.away{color:#949494}
 .s3-name.talking{color:${LAMP}}
