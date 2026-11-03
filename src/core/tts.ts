@@ -1,7 +1,11 @@
 // Client for the Qwen3-TTS service (Modal in production, local server in dev).
 // The service contract lives in tts/modal_app.py.
 
+import { Agent, fetch as undiciFetch } from "undici";
 import { ttsCost, type Ledger, globalLedger } from "./ledger";
+
+// Node's fetch gives up after 300 s without response headers; a laptop TTS server can take longer.
+let localAgent: Agent | null = null;
 
 export type Voice = { preset: string } | { ref_audio_b64: string; ref_text: string };
 
@@ -66,11 +70,14 @@ export async function synthesize(
   if (!base) throw new Error("TTS_URL is not set (voice synthesis disabled)");
   const ledger = opts.ledger ?? globalLedger;
   const t0 = performance.now();
-  const res = await fetch(`${base}/tts`, {
+  // Use undici's own fetch with the long-timeout agent for a local server (matching versions), global fetch otherwise.
+  const doFetch: typeof fetch = ttsIsLocal() ? (undiciFetch as unknown as typeof fetch) : fetch;
+  const res = await doFetch(`${base}/tts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TTS_TOKEN ?? ""}` },
     body: JSON.stringify({ text: ttsText(text), language: opts.language ?? "auto", voice, ...(opts.seed != null ? { seed: opts.seed } : {}), ...(opts.speed ? { speed: opts.speed } : {}) }),
     signal: AbortSignal.timeout(ttsTimeoutMs()),
+    ...(ttsIsLocal() ? { dispatcher: (localAgent ??= new Agent({ headersTimeout: 0, bodyTimeout: 0 })) } : {}),
   });
   const ms = Math.round(performance.now() - t0);
   if (!res.ok) {

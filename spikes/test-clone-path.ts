@@ -8,7 +8,14 @@ const j = async (r: Response) => { const d = await r.json(); if (!r.ok) throw ne
 const { roomId } = await j(await fetch(`${BASE}/api/rooms`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "clone path test" }) }));
 const { member, secret } = await j(await fetch(`${BASE}/api/rooms/${roomId}/join`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Kim", preset: "male" }) }));
 console.log("room", roomId, "member", member.id);
-const rec = await synthesize(ENROLL_SENTENCES.ko.join(" "), { preset: "sohee" }, { language: "ko", seed: 3 });
+import { decodeWav, encodeWav } from "../src/core/wav";
+const parts = [];
+for (const s of ENROLL_SENTENCES.ko) parts.push(decodeWav((await synthesize(s, { preset: "sohee" }, { language: "ko", seed: 3 })).wav));
+const gap = new Float32Array(Math.round(parts[0].sampleRate * 0.4));
+const joined = new Float32Array(parts.reduce((n, p) => n + p.samples.length + gap.length, 0));
+let off = 0;
+for (const p of parts) { joined.set(p.samples, off); off += p.samples.length + gap.length; }
+const rec = { wav: encodeWav({ sampleRate: parts[0].sampleRate, samples: joined }), durationMs: Math.round((joined.length / parts[0].sampleRate) * 1000) };
 console.log("stand-in recording", rec.durationMs, "ms");
 const fd = new FormData();
 fd.append("memberId", member.id); fd.append("secret", secret); fd.append("lang", "ko");
