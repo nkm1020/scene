@@ -1,0 +1,539 @@
+{
+  "room": "wrong chat",
+  "exportedAt": "2026-11-03T01:12:42.543Z",
+  "summary": {
+    "calls": 6,
+    "usd": 0.0582861,
+    "byModel": {
+      "qwen3-tts": {
+        "calls": 3,
+        "usd": 0.0564181,
+        "ms": 257095
+      },
+      "muse-voice-transcribe-1.0": {
+        "calls": 3,
+        "usd": 0.0018679999999999999,
+        "ms": 9787
+      }
+    }
+  },
+  "messages": [
+    {
+      "seq": 31,
+      "sender": "Sam",
+      "text": "ok Friday 7pm. everyone hide in the kitchen",
+      "direction": {
+        "emotion": "neutral",
+        "gesture": "none",
+        "camera": "room",
+        "pause_ms": 0,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "Okay, Friday, 7 PM, everyone hide in the kitchen.",
+        "attempts": [
+          {
+            "ok": true,
+            "vtMs": 1888,
+            "heard": "Okay, Friday, 7 PM, everyone hide in the kitchen.",
+            "ttsMs": 166596,
+            "attempt": 1,
+            "similarity": 1
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "seq": 32,
+      "sender": "Mina",
+      "text": "I'll bring the cake 🎂",
+      "direction": {
+        "emotion": "happy",
+        "gesture": "nod",
+        "camera": "room",
+        "pause_ms": 200,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "I'll bring the cake!.",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 2796,
+            "heard": "그정 全部就长自动东西的交代件。 Oh, bring the cake..",
+            "ttsMs": 99610,
+            "attempt": 1,
+            "similarity": 0
+          },
+          {
+            "ok": true,
+            "vtMs": 1429,
+            "heard": "I'll bring the cake!.",
+            "ttsMs": 63627,
+            "attempt": 2,
+            "similarity": 1
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 33,
+      "sender": "Sam",
+      "text": "DO NOT tell Jay",
+      "direction": {
+        "emotion": "angry",
+        "gesture": "shake",
+        "camera": "room",
+        "pause_ms": 150,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "Do not tell Jay!",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 2374,
+            "heard": "Tangira Blackford said, do not tell Jay.",
+            "ttsMs": 64700,
+            "attempt": 1,
+            "similarity": 0
+          },
+          {
+            "ok": true,
+            "vtMs": 1600,
+            "heard": "Do not tell Jay!",
+            "ttsMs": 33657,
+            "attempt": 2,
+            "similarity": 1
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 34,
+      "sender": "Jay",
+      "text": "tell me what",
+      "direction": {
+        "emotion": "surprised",
+        "gesture": "lean_in",
+        "camera": "close",
+        "pause_ms": 900,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "tell me what.!",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 1640,
+            "heard": "you, Tell me what.",
+            "ttsMs": 50711,
+            "attempt": 1,
+            "similarity": 0.7
+          },
+          {
+            "ok": true,
+            "vtMs": 1488,
+            "heard": "tell me what.!",
+            "ttsMs": 32741,
+            "attempt": 2,
+            "similarity": 1
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 35,
+      "sender": "Mina",
+      "text": "...",
+      "direction": {
+        "emotion": "sad",
+        "gesture": "step_back",
+        "camera": "close",
+        "pause_ms": 1000,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "silent",
+        "similarity": 1,
+        "heard": "",
+        "attempts": [],
+        "flags": [
+          "emoji_only"
+        ]
+      }
+    },
+    {
+      "seq": 36,
+      "sender": "Sam",
+      "text": "wrong chat",
+      "direction": {
+        "emotion": "neutral",
+        "gesture": "shake",
+        "camera": "room",
+        "pause_ms": 600,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "Wrong chat.",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 1046,
+            "heard": "",
+            "ttsMs": 34978,
+            "attempt": 1,
+            "similarity": 0
+          },
+          {
+            "ok": true,
+            "vtMs": 1541,
+            "heard": "Wrong chat.",
+            "ttsMs": 41916,
+            "attempt": 2,
+            "similarity": 1
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 37,
+      "sender": "Jay",
+      "text": "this is the only chat we have",
+      "direction": {
+        "emotion": "laughing",
+        "gesture": "nod",
+        "camera": "close",
+        "pause_ms": 400,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 0.869565,
+        "heard": "This is the only chat we have and.",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 0,
+            "error": "The operation was aborted due to timeout",
+            "heard": "",
+            "ttsMs": 0,
+            "attempt": 1,
+            "similarity": 0
+          },
+          {
+            "ok": true,
+            "vtMs": 2276,
+            "heard": "This is the only chat we have and.",
+            "ttsMs": 51123,
+            "attempt": 2,
+            "similarity": 0.8695652173913043
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 38,
+      "sender": "Mina",
+      "text": "surprise?",
+      "direction": {
+        "emotion": "surprised",
+        "gesture": "lean_in",
+        "camera": "room",
+        "pause_ms": 700,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "Surprise!",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 1511,
+            "heard": "you surprise.!",
+            "ttsMs": 39473,
+            "attempt": 1,
+            "similarity": 0.625
+          },
+          {
+            "ok": true,
+            "vtMs": 1416,
+            "heard": "Surprise!",
+            "ttsMs": 36673,
+            "attempt": 2,
+            "similarity": 1
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 39,
+      "sender": "Jay",
+      "text": "I'm bringing the cake",
+      "direction": {
+        "emotion": "happy",
+        "gesture": "lean_in",
+        "camera": "room",
+        "pause_ms": 300,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "I'm bringing the cake.",
+        "attempts": [
+          {
+            "ok": false,
+            "vtMs": 2677,
+            "heard": "form it. it. I got not volo by a thousand and do then is because smigo it defest.:",
+            "ttsMs": 68003,
+            "attempt": 1,
+            "similarity": 0
+          },
+          {
+            "ok": false,
+            "vtMs": 3939,
+            "heard": "enters a tour a tour for I think Sophie's a joke should be friend that they're creating the West I semi having hand he would we be do we price you be worst W yes yes",
+            "ttsMs": 107190,
+            "attempt": 2,
+            "similarity": 0
+          },
+          {
+            "ok": false,
+            "vtMs": 2347,
+            "heard": "The cellies, stopping bringing the cake!",
+            "ttsMs": 59922,
+            "attempt": 3,
+            "similarity": 0
+          },
+          {
+            "ok": false,
+            "vtMs": 3226,
+            "heard": "identify these in Cabo Chide, me, chorus inundated, take it paradius, the fat you. I'm bringing the cake..",
+            "ttsMs": 61773,
+            "attempt": 4,
+            "similarity": 0
+          },
+          {
+            "ok": false,
+            "vtMs": 3746,
+            "heard": "And I was known to gay. Gas.",
+            "ttsMs": 107402,
+            "attempt": 5,
+            "similarity": 0
+          },
+          {
+            "ok": true,
+            "vtMs": 2815,
+            "heard": "I'm bringing the cake.",
+            "ttsMs": 87920,
+            "attempt": 6,
+            "similarity": 1
+          }
+        ],
+        "flags": [
+          "resynthesized"
+        ]
+      }
+    },
+    {
+      "seq": 40,
+      "sender": "Sam",
+      "text": "you can't bring your own cake",
+      "direction": {
+        "emotion": "angry",
+        "gesture": "shake",
+        "camera": "room",
+        "pause_ms": 200,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "you can't bring your own cake..",
+        "attempts": [
+          {
+            "ok": true,
+            "vtMs": 1622,
+            "heard": "you can't bring your own cake..",
+            "ttsMs": 35610,
+            "attempt": 1,
+            "similarity": 1
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "seq": 41,
+      "sender": "Jay",
+      "text": "watch me",
+      "direction": {
+        "emotion": "angry",
+        "gesture": "lean_in",
+        "camera": "close",
+        "pause_ms": 400,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "verified",
+        "similarity": 1,
+        "heard": "Watch me.",
+        "attempts": [
+          {
+            "ok": true,
+            "vtMs": 1901,
+            "heard": "Watch me.",
+            "ttsMs": 51415,
+            "attempt": 1,
+            "similarity": 1
+          }
+        ],
+        "flags": []
+      }
+    },
+    {
+      "seq": 42,
+      "sender": "Mina",
+      "text": "🎂🎂🎂",
+      "direction": {
+        "emotion": "laughing",
+        "gesture": "none",
+        "camera": "close",
+        "pause_ms": 600,
+        "source": "spark"
+      },
+      "voice": {
+        "status": "silent",
+        "similarity": 1,
+        "heard": "",
+        "attempts": [],
+        "flags": [
+          "emoji_only"
+        ]
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "id": 12,
+      "room_id": "demo-template",
+      "model": "qwen3-tts",
+      "op": "message.tts",
+      "ms": 61773,
+      "usd": 0.0135896,
+      "ok": true,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "audio_ms": 9680,
+      "note": "ryan",
+      "at": "2026-11-03T01:08:35.603+00:00"
+    },
+    {
+      "id": 13,
+      "room_id": "demo-template",
+      "model": "muse-voice-transcribe-1.0",
+      "op": "message.readback",
+      "ms": 3226,
+      "usd": 0.000484,
+      "ok": true,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "audio_ms": 9680,
+      "note": null,
+      "at": "2026-11-03T01:08:38.926+00:00"
+    },
+    {
+      "id": 14,
+      "room_id": "demo-template",
+      "model": "qwen3-tts",
+      "op": "message.tts",
+      "ms": 107402,
+      "usd": 0.0233778,
+      "ok": true,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "audio_ms": 17178,
+      "note": "ryan",
+      "at": "2026-11-03T01:10:26.336+00:00"
+    },
+    {
+      "id": 15,
+      "room_id": "demo-template",
+      "model": "muse-voice-transcribe-1.0",
+      "op": "message.readback",
+      "ms": 3746,
+      "usd": 0.00086,
+      "ok": true,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "audio_ms": 17200,
+      "note": null,
+      "at": "2026-11-03T01:10:30.148+00:00"
+    },
+    {
+      "id": 16,
+      "room_id": "demo-template",
+      "model": "qwen3-tts",
+      "op": "message.tts",
+      "ms": 87920,
+      "usd": 0.0194507,
+      "ok": true,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "audio_ms": 10442,
+      "note": "ryan",
+      "at": "2026-11-03T01:11:58.079+00:00"
+    },
+    {
+      "id": 17,
+      "room_id": "demo-template",
+      "model": "muse-voice-transcribe-1.0",
+      "op": "message.readback",
+      "ms": 2815,
+      "usd": 0.000524,
+      "ok": true,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "audio_ms": 10480,
+      "note": null,
+      "at": "2026-11-03T01:12:00.915+00:00"
+    }
+  ]
+}

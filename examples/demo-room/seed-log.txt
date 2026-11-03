@@ -1,0 +1,20 @@
+# Demo room seeding run, Nov 3 2026 (Qwen3-TTS on a local Apple M1 Pro, MPS float16, sampling temperature 0.9)
+# Each line: status, read-back score per synthesis attempt (Voice Transcribe, strict 1 - CER). Summary = receipt of the run.
+room + members + messages ok; directing with Spark…
+director spark ✓
+m01 verified 1.00
+m02 verified 0.00→1.00
+m03 verified 0.00→1.00
+m04 verified 0.70→1.00
+m05 silent 
+m06 verified 0.00→1.00
+m07 verified 0.00→0.87
+m08 verified 0.63→1.00
+m09 captions_only 0.00→0.00→0.00
+m10 verified 1.00
+m11 verified 1.00
+m12 silent 
+{"calls":35,"usd":0.21699930555555558,"byModel":{"muse-spark-1.3":{"calls":1,"usd":0.00675775,"ms":12697},"qwen3-tts":{"calls":17,"usd":0.2071815555555556,"ms":1037945},"muse-voice-transcribe-1.0":{"calls":17,"usd":0.0030600000000000002,"ms":33491}},"byOp":{"director.spark":{"calls":1,"usd":0.00675775,"ms":12697},"message.tts":{"calls":17,"usd":0.2071815555555556,"ms":1037945},"message.readback":{"calls":17,"usd":0.0030600000000000002,"ms":33491}}}
+
+# Re-render of m09 after lowering temperature to 0.65 (scripts/rerender.ts):
+"I'm bringing the cake" → verified [0.00→0.00→0.00→0.00→0.00→1.00]
