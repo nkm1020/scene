@@ -77,6 +77,52 @@ function main() {
   side.append(dirHead, dirInfo, dirLog, lines, recHead, rec, tot, el("p", "rp-note", `generated ${data.generatedAt}`));
   app.append(phone, side);
 
+  // Glasses view (?glasses): the same stage, screen-blended into a display lens over the real world.
+  if (new URLSearchParams(location.search).has("glasses")) {
+    document.body.classList.add("glasses");
+    const world = el("div", "gl-world");
+    const frame = el("div", "gl-frame");
+    frame.innerHTML = `<svg viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs><linearGradient id="lens" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset="1" stop-color="#fff" stop-opacity=".02"/></linearGradient></defs>
+      <path d="M40 120 Q40 70 100 64 L410 60 Q470 60 470 120 L462 260 Q455 350 360 356 L150 360 Q60 360 52 270 Z" fill="url(#lens)" stroke="#0a0a0a" stroke-width="34"/>
+      <path d="M960 120 Q960 70 900 64 L590 60 Q530 60 530 120 L538 260 Q545 350 640 356 L850 360 Q940 360 948 270 Z" fill="url(#lens)" stroke="#0a0a0a" stroke-width="34"/>
+      <path d="M470 120 Q500 92 530 120" fill="none" stroke="#0a0a0a" stroke-width="30"/>
+      <path d="M40 110 L0 96" stroke="#0a0a0a" stroke-width="30"/><path d="M960 110 L1000 96" stroke="#0a0a0a" stroke-width="30"/></svg>`;
+    const hud = el("div", "gl-hud");
+    const note = el("div", "gl-note", "Same group chat, seen through a display lens. Mock-up: rendered in a browser.");
+    stageHost.classList.add("gl-stage");
+    hud.append(stageHost);
+    document.body.append(world, hud, frame, note);
+    const style = document.createElement("style");
+    style.textContent = `
+      body.glasses #app .rp-phone{display:none}
+      body.glasses{overflow:hidden}
+      .gl-world{position:fixed;inset:0;background:
+        radial-gradient(40% 30% at 22% 30%,rgba(255,214,150,.55),transparent 70%),
+        radial-gradient(30% 25% at 78% 26%,rgba(255,190,120,.45),transparent 70%),
+        radial-gradient(60% 40% at 50% 100%,rgba(120,80,50,.8),transparent 70%),
+        linear-gradient(#6b5642,#2e231b);filter:blur(6px) saturate(1.1)}
+      .gl-world::after{content:"";position:absolute;left:8%;right:8%;bottom:6%;height:24%;border-radius:50%/40%;background:radial-gradient(closest-side,rgba(60,38,24,.9),rgba(60,38,24,0))}
+      .gl-frame{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:3}
+      .gl-frame svg{width:min(100vw,160vh);height:auto;filter:drop-shadow(0 20px 40px rgba(0,0,0,.5))}
+      body.glasses{--gw:min(100vw,160vh)}
+      .gl-hud{position:fixed;z-index:2;left:50%;top:50%;width:calc(var(--gw)*0.36);aspect-ratio:4/3;transform:translate(calc(var(--gw)*0.245 - 50%),-50%);
+        mix-blend-mode:screen;border-radius:18px;overflow:hidden}
+      .gl-hud .gl-stage{position:absolute;inset:0}
+      .gl-hud .sc-stage{background:#000}
+      .gl-hud .sc-room,.gl-hud .sc-floor,.gl-hud .sc-vignette,.gl-hud .sc-scanall{display:none}
+      .gl-hud .sc-table{opacity:.55}
+      .gl-hud .sc-caption .line{background:rgba(0,0,0,.6);font-size:clamp(12px,1.6vw,18px)}
+      .gl-hud .sc-mark{top:6px;right:8px;font-size:8px}
+      .gl-note{position:fixed;left:16px;bottom:12px;z-index:4;font-size:11px;color:rgba(255,255,255,.55)}
+      body.glasses .rp-side{position:fixed;right:-9999px}
+      body.glasses .gl-ctl{position:fixed;z-index:5;left:50%;bottom:18px;transform:translateX(-50%)}
+    `;
+    document.head.append(style);
+    controls.classList.add("gl-ctl");
+    document.body.append(controls);
+  }
+
   const stage = createStage(stageHost, { members: data.members, viewerId: null });
   let speed = 1;
   let ctl: ReturnType<typeof stage.play> | null = null;

@@ -82,6 +82,11 @@ export const STAGE_CSS = String.raw`
 @keyframes sc-nod{0%,100%{transform:perspective(500px) rotateX(0)}50%{transform:perspective(500px) translateY(3%) rotateX(-18deg)}}
 .g-shake .sc-layer.head{animation:sc-headshake .35s ease-in-out 3}
 @keyframes sc-headshake{0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}}
+/* self mirror (bottom-left): visible only while your own line plays */
+.sc-seat.self{z-index:22;opacity:0;transition:opacity .35s ease;pointer-events:none}
+.sc-seat.self.speaking{opacity:1}
+.sc-seat.self .sc-name{top:auto;bottom:-14%;font-size:9px;letter-spacing:.08em;color:var(--holo)}
+.sc-seat.self .sc-layer.head{transform:none}
 /* caption */
 .sc-caption{position:absolute;left:50%;bottom:4.5%;transform:translateX(-50%);width:min(92%,640px);text-align:center;pointer-events:none;z-index:20}
 .sc-caption .who{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--holo);opacity:.9;margin-bottom:6px}

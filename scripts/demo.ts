@@ -14,7 +14,7 @@ import "dotenv/config";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { Ledger } from "../src/core/ledger";
-import { createPersona } from "../src/core/persona";
+import { createPersona, createAwayPose } from "../src/core/persona";
 import { directSegment, type Direction } from "../src/core/director";
 import { renderVoice, verifyEnrollment, type VoiceRender, type VoiceSpec } from "../src/core/voice";
 import { ttsEndpoint, type Voice } from "../src/core/tts";
@@ -61,17 +61,19 @@ async function main() {
   log(`Scene demo · room "wrong chat" · ${SEED_MESSAGES.length} missed messages · voice: ${tts ? "Qwen3-TTS " + tts : "off (captions)"}`);
 
   // 1) Personas
-  log("\n[1/4] Personas: Muse Image draws, SAM 3.1 cuts out");
+  log("\n[1/4] Personas: Muse Image draws, SAM 3.1 cuts out; Muse Image edits an away pose (head bowed) for presence");
   const personas = await pool(SEED_MEMBERS, 3, async (m) => {
     const file = path.join(OUT, "personas", `${m.id}.png`);
     if (flag("reuse-personas") && existsSync(`public/seed/${m.id}.png`)) {
       log(`  ${m.name}: reused public/seed/${m.id}.png`);
-      return readFileSync(`public/seed/${m.id}.png`);
+      return { png: readFileSync(`public/seed/${m.id}.png`), away: existsSync(`public/seed/${m.id}-away.png`) ? readFileSync(`public/seed/${m.id}-away.png`) : null };
     }
     const p = await createPersona(m, { ledger });
     writeFileSync(file, p.png);
-    log(`  ${m.name}: "${m.hair}, ${m.outfit}, ${m.vibe}" → ${p.width}×${p.height}, SAM "${p.phrase}", mask ${(p.maskCoverage * 100).toFixed(0)}%${p.flags.length ? " " + p.flags.join(",") : ""}`);
-    return p.png;
+    const away = await createAwayPose(p.sourceImage, { ledger }).catch((e) => (log(`  ${m.name}: away pose failed (${e.message}); CSS tilt fallback`), null));
+    if (away) writeFileSync(path.join(OUT, "personas", `${m.id}-away.png`), away.png);
+    log(`  ${m.name}: "${m.hair}, ${m.outfit}, ${m.vibe}" → ${p.width}×${p.height}, SAM "${p.phrase}", mask ${(p.maskCoverage * 100).toFixed(0)}%${away ? ", away pose ✓" : ""}${p.flags.length ? " " + p.flags.join(",") : ""}`);
+    return { png: p.png, away: away?.png ?? null };
   });
 
   // 2) Voice enrollment (optional, Sam only — you can only enroll your own voice)
@@ -141,7 +143,13 @@ async function main() {
     };
   });
   const summary = ledger.summary();
-  const members = SEED_MEMBERS.map((m, i) => ({ id: m.id, name: m.name, personaUrl: dataUrl(personas[i], "image/png"), present: m.id !== "jay" }));
+  const members = SEED_MEMBERS.map((m, i) => ({
+    id: m.id,
+    name: m.name,
+    personaUrl: dataUrl(personas[i].png, "image/png"),
+    awayUrl: personas[i].away ? dataUrl(personas[i].away!, "image/png") : null,
+    present: m.id !== "jay", // Jay is away in the seed room: bowed until he performs a line
+  }));
   const receipt = {
     room: "wrong chat",
     generatedAt: new Date().toISOString(),

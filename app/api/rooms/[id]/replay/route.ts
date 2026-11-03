@@ -23,10 +23,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const segment = (msgs ?? []).reverse();
     if (!segment.length) return Response.json({ directions: [], log: [], source: "none" });
     // Make sure every message has a render (voice + read-back) before the show.
-    const { data: existing } = await db().from("renders").select("message_id, status").in("message_id", segment.map((m) => m.id));
-    const have = new Set((existing ?? []).filter((r) => r.status !== "pending").map((r) => r.message_id));
-    const missing = segment.filter((m) => !have.has(m.id));
-    const renderAll = Promise.all(missing.map((m) => renderMessage({ id: m.id, room_id: id, member_id: m.member_id, text: m.text })));
+    // Messages with no render row get rendered now; renders already in progress are awaited (no double synthesis).
+    const ids = segment.map((m) => m.id);
+    const { data: existing } = await db().from("renders").select("message_id, status").in("message_id", ids);
+    const known = new Set((existing ?? []).map((r) => r.message_id));
+    const missing = segment.filter((m) => !known.has(m.id));
+    const renderAll = (async () => {
+      await Promise.all(missing.map((m) => renderMessage({ id: m.id, room_id: id, member_id: m.member_id, text: m.text })));
+      for (let i = 0; i < 60; i++) {
+        const { count } = await db().from("renders").select("message_id", { count: "exact", head: true }).in("message_id", ids).eq("status", "pending");
+        if (!count) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    })();
     const run = await directSegment(
       segment.map((m: any) => ({ id: m.id, sender_id: m.member_id, sender_name: m.members?.name, text: m.text })),
       { ledger, reasoningEffort: "minimal" },

@@ -125,7 +125,6 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         console.debug("[rt] message", m.id, m.member_id === creds.memberId ? "mine" : "theirs");
         if (stateRef.current && !stateRef.current.messages.some((x) => x.id === m.id)) stateRef.current = { ...stateRef.current, messages: [...stateRef.current.messages, m] };
         setState((s) => (s && !s.messages.some((x) => x.id === m.id) ? { ...s, messages: [...s.messages, m] } : s));
-        if (m.member_id === creds.memberId) return;
         const early = earlyRenders.current.get(m.id);
         if (early) {
           earlyRenders.current.delete(m.id);
@@ -133,7 +132,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
             liveQueue.current.push(toItem(m, early));
             void pump();
           }
-        } else stage.current?.setWaiting(m.member_id, true);
+        } else if (m.member_id !== creds.memberId) stage.current?.setWaiting(m.member_id, true);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "renders", filter: `room_id=eq.${roomId}` }, (p) => {
         const r = p.new as Render;
@@ -148,8 +147,8 @@ export default function RoomApp({ roomId }: { roomId: string }) {
           earlyRenders.current.set(r.message_id, r);
           return;
         }
-        if (msg.member_id === creds.memberId) return;
         if (modeRef.current !== "idle") return; // replay will cover it
+        // Your own line plays too, in the small mirror: you hear what your friends hear.
         stage.current?.setWaiting(msg.member_id, false);
         liveQueue.current.push(toItem(msg, r));
         void pump();

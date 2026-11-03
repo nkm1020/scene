@@ -85,6 +85,7 @@ interface Seat {
   y: number; // % of stage height (feet)
   s: number; // depth scale
   depth: number;
+  self?: boolean;
 }
 
 export interface StageOptions {
@@ -213,8 +214,30 @@ export class Stage {
         depth,
       });
     });
+    // The viewer's own seat is the camera. Their persona appears only as a small mirror (bottom-left)
+    // while their own message plays, so a person alone in a room still sees and hears how friends get it.
+    const me = this.members.find((m) => m.id === this.viewerId);
+    if (me) {
+      const el = document.createElement("div");
+      el.className = "sc-seat self present";
+      el.dataset.member = me.id;
+      const url = me.personaUrl || DEFAULT_PERSONA;
+      el.innerHTML = `<div class="sc-disc"></div><div class="sc-persona"><div class="sc-pulse"><div class="sc-pose here">
+        <div class="sc-layer body"><img class="sc-img" alt="" draggable="false"></div>
+        <div class="sc-layer head"><img class="sc-img" alt="" draggable="false"></div></div></div><div class="sc-emote"></div></div>
+        <div class="sc-name">You · as friends hear it</div>`;
+      el.querySelectorAll<HTMLImageElement>("img").forEach((img) => (img.src = url));
+      this.cam.parentElement!.appendChild(el); // outside the camera rig: never zoomed
+      this.selfSeat?.el.remove();
+      this.selfSeat = { member: me, el, persona: el.querySelector(".sc-persona") as HTMLDivElement, pulse: el.querySelector(".sc-pulse") as HTMLDivElement, emote: el.querySelector(".sc-emote") as HTMLDivElement, x: 17, y: 88, s: 0.62, depth: 0, self: true };
+    } else {
+      this.selfSeat?.el.remove();
+      this.selfSeat = null;
+    }
     this.place();
   }
+
+  private selfSeat: Seat | null = null;
 
   private place() {
     const w = this.root.clientWidth || 360;
@@ -223,7 +246,15 @@ export class Stage {
     const base = Math.min(w * (n <= 2 ? 0.5 : n === 3 ? 0.42 : n === 4 ? 0.29 : n === 5 ? 0.25 : 0.21), h * 0.4);
     this.root.style.setProperty("--table-y", `${TABLE_Y}%`);
     this.root.style.setProperty("--table-h", `${TABLE_H}%`);
-    for (const seat of this.seats.values()) {
+    const all = [...this.seats.values(), ...(this.selfSeat ? [this.selfSeat] : [])];
+    for (const seat of all) {
+      if (seat.self) {
+        seat.el.style.width = `${base * seat.s}px`;
+        seat.el.style.left = `${seat.x}%`;
+        seat.el.style.top = `${seat.y}%`;
+        seat.el.style.transform = "translate(-50%,-100%)";
+        continue;
+      }
       const speaking = seat.el.classList.contains("speaking");
       const g = seat.el.dataset.gesture;
       let k = speaking ? 1.12 : 1;
@@ -329,8 +360,8 @@ export class Stage {
     const signal = opts.signal ?? { cancelled: false, skip: false };
     (window as any).__sceneLog ??= [];
     (window as any).__sceneLog.push({ t: Date.now(), id: item.messageId, member: item.memberId, status: item.status, text: item.text.slice(0, 40) });
-    const seat = this.seats.get(item.memberId) ?? null;
-    const wasAbsent = seat ? !seat.member.present : false;
+    const seat = this.seats.get(item.memberId) ?? (this.selfSeat && item.memberId === this.viewerId ? this.selfSeat : null);
+    const wasAbsent = seat && !seat.self ? !seat.member.present : false;
     for (const s of this.seats.values()) s.el.classList.toggle("dimmed", s !== seat);
     if (seat) {
       seat.el.classList.remove("absent", "waiting");
@@ -343,7 +374,7 @@ export class Stage {
       seat.emote.classList.toggle("on", !!icon);
       this.place();
     }
-    this.focusCamera(seat, item.camera);
+    this.focusCamera(seat?.self ? null : seat, item.camera);
     this.showCaption(item);
     const dur = itemDuration(item) / speed;
     let audio: HTMLAudioElement | null = null;
@@ -427,6 +458,7 @@ export class Stage {
 
   destroy() {
     this.current && (this.current.cancelled = true);
+    this.selfSeat?.el.remove();
     this.root.remove();
   }
 }
