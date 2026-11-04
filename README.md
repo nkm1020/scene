@@ -21,13 +21,14 @@ Turn the external voice off and Scene still works: the figures, the performance 
 | **Dress your figure; the face never changes.** Like an avatar builder: open Hair, Top or Extras and six options appear, drawn on your own figure. Or say it ("빨간 비니 씌워줘"). Whatever you pick, your face stays pixel for pixel. | **Muse Image** draws every option on your figure. **SAM 3.1** found your face once; code pastes it back onto each edit (glasses and hat brims, cut out by SAM 3.1, stay on top). Said changes: **Voice Transcribe** writes them down, **Muse Spark** turns them into one edit, `validateSaid` checks it. |
 | **Your home.** Your figure on a walnut plinth in your own room. Drag to walk round it (front, three-quarter, side, back: eight views, swapped like a stop-motion turnaround), pinch to come closer. It blinks. | **Muse Image** draws the turnaround views from behind (two more edits of the same figurine), **SAM 3.1** cuts them out. |
 | **The room you sit in.** Pick a dining room, a corner cafe or a rooftop at night, or say any room ("비 오는 밤 서울 포장마차") and everyone at the table sees it change. | **Muse Spark** turns the words into a set plan (place, walls, floor, tabletop) with no field for people or writing; `validateSetSpec` checks it (fixed checkpoint, 3 tries); **Muse Image** paints the six surfaces in parallel (about 30 s, $0.06). |
+| **What you missed, in a few lines.** After a missed segment plays, a short catch-up: the headline and up to three points. | **Muse Spark** writes it beside the director's call (no extra wait); `validateSummary` checks the shape and that every quote is something someone actually sent. |
 | **Demo friends.** Alone in a room? Seat Sam, Mina or Jay. They answer what you post, in character, and their replies are performed like anyone's. | **Muse Spark** proposes up to two replies; `validateReplies` keeps only short lines from friends who are at the table. |
 | **The performance.** Who each line is said to (so the right people turn); who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. Live lines use a rule table: someone called by name, else whoever spoke before. |
 | **Talking.** Hold to talk; your words become the message. | **Muse Voice Transcribe**. |
 | **The guarantee.** A line plays in a voice only if it says exactly the message. | **Muse Voice Transcribe** listens to every synthesized line and compares it with the message. |
 | **Consent.** Only your own voice can be registered. | **Muse Voice Transcribe** checks that you read the three sentences shown. |
 
-External pieces, each replaceable: **Qwen3-TTS** (Apache 2.0, self-hosted) speaks the lines, because Meta has no text-to-speech; **fal.ai** hosts Meta's SAM 3D Objects; **Supabase** stores rooms and syncs them.
+External pieces, each replaceable: the lines are spoken by **OpenAI gpt-4o-mini-tts** (preset voices, told each line's mood) or **Qwen3-TTS** (Apache 2.0, self-hosted, clones a registered voice), because Meta has no text-to-speech; **fal.ai** hosts Meta's SAM 3D Objects; **Supabase** stores rooms and syncs them.
 
 ## Use it like a chat app (no login)
 
@@ -45,7 +46,7 @@ Accounts do not exist: your key lives in your browser. Demo friends played by Sp
 
 ```bash
 git clone <this repo> && cd scene
-cp .env.example .env          # add META_API_KEY (dev.meta.ai, Standard tier). FAL_KEY adds 3D meshes, TTS_URL adds voices.
+cp .env.example .env          # add META_API_KEY (dev.meta.ai, Standard tier). OPENAI_API_KEY or TTS_URL adds voices, FAL_KEY 3D meshes.
 npm install
 npm test                      # validators, rule table, read-back comparator, number reading, WAV helpers: 0 API calls
 npm run demo -- --voice none  # sculpt the cast → Spark directs the table → out/replay.html + out/receipt.json
