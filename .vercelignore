@@ -1,0 +1,11 @@
+# Vercel uploads untracked files too: keep keys and local output out of every deployment
+.env
+.env.*
+!.env.example
+out/
+.next*/
+spikes/*.log
+tts/*.log
+tts/*.pid
+tts/
+examples/
