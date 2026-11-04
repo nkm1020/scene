@@ -6,6 +6,7 @@ A group chat with a new layout. You make yourself once (a name, your own voice, 
 
 Theme: **Build for Your World** · Track: Indie Developer · Meta AI Developer Hackathon 2026
 
+**Live:** [scene-lovat.vercel.app](https://scene-lovat.vercel.app) (open the app, make yourself, then the demo chat is waiting; open a second browser to be your own friend)
 <!-- DEMO-LINKS -->
 
 ## Where Meta's models are the product
