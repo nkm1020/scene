@@ -64,6 +64,8 @@ export interface PerformItem {
   status?: "verified" | "captions_only" | "silent" | "pending";
   flags?: string[];
   readback?: { score: number; heard: string }[];
+  /** the line's frame number on the chat strip, printed with it on stage */
+  frame?: string;
 }
 
 export interface TimelineEntry {
@@ -1011,6 +1013,12 @@ export class Stage {
       this.camera.updateProjectionMatrix();
     }
     this.camera.position.copy(this.camPos);
+    // with the left of the picture covered, step back along the lens so the uncovered part still holds the whole shot
+    if (this.inset > 0.5) {
+      const w = this.root.clientWidth || 360;
+      const back = this.camPos.distanceTo(this.look) * (w / Math.max(1, w - this.inset) - 1);
+      this.camera.position.addScaledVector(this.camPos.clone().sub(this.look).normalize(), back);
+    }
     this.camera.lookAt(this.look);
     // set lights drift a hair between exposures
     if (exposure && this.lamp) this.lamp.intensity = this.lampBase * (1 + (Math.random() - 0.5) * 0.035);
@@ -1139,7 +1147,8 @@ export class Stage {
    * your own line sits at the bottom of the screen, where you said it.
    */
   private showCaption(item: PerformItem) {
-    const flag = this.quiet || item.status !== "captions_only" ? "" : item.flags?.includes("voice_disabled") ? "Captions only" : "Voice failed the read-back check · captions only";
+    const check = this.quiet || item.status !== "captions_only" ? "" : item.flags?.includes("voice_disabled") ? "Captions only" : "Voice failed the read-back check · captions only";
+    const flag = [item.frame && `Frame ${item.frame}`, check].filter(Boolean).join(" · ");
     for (const o of this.figures.values()) o.bubble.classList.remove("on");
     const f = item.memberId === this.viewerId ? null : this.figures.get(item.memberId);
     if (!f) {

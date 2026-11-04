@@ -64,6 +64,7 @@ function toItem(m: Message, r: Render | undefined, roster?: { member_id: string;
     durationMs: r?.duration_ms ?? 0,
     status: r?.status === "pending" || !r ? "captions_only" : r.status,
     flags: r?.flags ?? [],
+    frame: String(m.seq).padStart(3, "0"),
   };
 }
 
@@ -76,7 +77,7 @@ function runTime(ms: number) {
   const s = ms / 1000;
   return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 }
-const frameNo = (seq: number) => String(seq).padStart(3, "0");
+const frameNo = (seq: number) => String(seq).padStart(3, "0"); // the same number toItem prints on stage
 
 export default function RoomApp({ roomId }: { roomId: string }) {
   const [state, setState] = useState<RoomState | null>(null);
@@ -451,7 +452,13 @@ function FilmStrip({
   useEffect(() => {
     if (open && list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [open]);
-  useEffect(() => onOpenChange(open), [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    onOpenChange(open);
+    if (!open) return;
+    const again = () => onOpenChange(open); // a window that narrows past the breakpoint drops the side framing
+    window.addEventListener("resize", again);
+    return () => window.removeEventListener("resize", again);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   // on a phone the open strip covers most of the stage: when the table starts performing, fold it back to the peek
   useEffect(() => {
     if (playing && window.innerWidth < 1024) setOpen(false);
