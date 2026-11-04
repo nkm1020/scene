@@ -34,7 +34,7 @@ const POSE_EDITS_SOFT: Record<Exclude<FigurePose, "neutral">, string> = {
 export function figurePrompt(spec: PersonaSpec): string {
   return [
     `Claymation figurine of a person with ${spec.hair}, wearing ${spec.outfit}, ${spec.vibe} mood.`,
-    "Handmade plasticine miniature with faint fingerprints, slightly oversized head, sitting upright on a small plain wooden stool, hands resting on the knees, both feet on the ground, full body with the whole stool visible, front view facing the camera.",
+    "Handmade plasticine miniature with faint fingerprints, a charming stop-motion film puppet: gently stylized, with the head only a little larger than a real person's (not a big-headed chibi, not realistic), simple rounded features and a soft friendly face. Sitting upright on a small plain wooden stool, hands resting on the knees, both feet on the ground, full body with the whole stool visible, front view facing the camera.",
     "Soft even studio lighting with no hard shadows, plain light gray background, centered with empty space around it, nothing else in the frame, no text.",
   ].join(" ");
 }
@@ -43,7 +43,7 @@ export function figurePrompt(spec: PersonaSpec): string {
  * Stop-motion replacement frames: small edits of a pose image (mouth shapes, a blink, the other half of a laugh),
  * swapped in at 12 fps by the stage, the way stop-motion films swap faces.
  */
-export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk", "q3_back", "back"] as const;
+export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk", "q3_back", "back", "away_q3", "away_side"] as const;
 export type FigureFrame = (typeof FIGURE_FRAMES)[number];
 const HOLD = "Same character, same clay style, same stool, same pose, same framing, same plain light gray background and lighting. Change nothing else:";
 const MOVE = "Same character, same clay style, same stool, same framing, same plain light gray background and lighting.";
@@ -61,6 +61,9 @@ export const FRAME_EDITS: Record<FigureFrame, { from: FigurePose | FigureFrame; 
   // the turntable on the home screen: the two views from behind (mirrored for the other half of the turn)
   q3_back: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 135 degrees, so we see the figure from behind at a three-quarter angle, facing away toward the back right of the picture: the back of the head and hair, one shoulder and the back of the outfit, the face hidden, still sitting with hands on the knees.` },
   back: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 180 degrees, so we see the figure from directly behind: the back of the head and hair and the back of the outfit, no face visible, still sitting on the stool.` },
+  // asleep at a seat to the side: slumped over toward the table, seen three-quarter or in profile (not bowing to the lens)
+  away_q3: { from: "q3", prompt: `${VIEW} The same three-quarter view, but now asleep: bent far forward at the waist, arms folded across the knees, head down resting on the folded arms so the face is hidden, like napping face-down on a desk.` },
+  away_side: { from: "side", prompt: `${VIEW} The same side profile view facing the right of the picture, but now asleep: bent far forward at the waist, arms folded across the knees, head down resting on the folded arms so the face is hidden, like napping face-down on a desk.` },
   // a figure turned toward someone keeps talking: the turned views get an open mouth too
   q3_talk: { from: "q3", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
   side_talk: { from: "side", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
@@ -83,8 +86,12 @@ export async function createFigureFrames(
     const { from, prompt } = FRAME_EDITS[name];
     try {
       const edited = await editImage([images[from]!], prompt, { op: "figure.frame", ledger: opts.ledger });
-      const a = await liftPose(from in POSE_EDITS || from === "neutral" ? (from as FigurePose) : "neutral", edited.bytes, opts);
-      images[name] = edited.bytes;
+      let bytes = edited.bytes;
+      // the turned sleeping views must face the right of the picture like the other views (the stage mirrors them);
+      // the image model sometimes draws them the other way round
+      if ((name === "away_side" || name === "away_q3") && (await facingRight(bytes, opts.ledger)) === false) bytes = await sharp(bytes).flop().png().toBuffer();
+      const a = await liftPose(from in POSE_EDITS || from === "neutral" ? (from as FigurePose) : "neutral", bytes, opts);
+      images[name] = bytes;
       await opts.onFrame?.(name, a);
       return [name, a] as const;
     } catch (e) {
@@ -97,6 +104,18 @@ export async function createFigureFrames(
   const done = await Promise.all(first.map(make));
   const second = wanted.filter((f) => !first.includes(f) && images[FRAME_EDITS[f].from]?.length);
   return [...done, ...(await Promise.all(second.map(make)))];
+}
+
+/**
+ * Fixed check for a figure seen from the side: which way it faces. SAM 3.1 finds the head; a figure slumped forward in
+ * profile has its head on the side it faces. Null when no head is found (the frame is kept as drawn).
+ */
+export async function facingRight(image: Buffer, ledger?: Ledger): Promise<boolean | null> {
+  const { width: W } = await sharp(image).metadata();
+  const seg = await segment(image, "image/png", "head", { op: "figure.facing", ledger }).catch(() => null);
+  const m = seg?.masks?.[0];
+  if (!m || !W) return null;
+  return (m.bounds.left + m.bounds.right) / 2 >= W / 2;
 }
 
 export function poseEditPrompt(pose: Exclude<FigurePose, "neutral">, soft = false): string {

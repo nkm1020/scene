@@ -119,7 +119,7 @@ const CENTER = new THREE.Vector3(0, TABLE_Y, 0);
 const ENV_FPS = 30;
 const FPS = 12; // stop motion: the puppets get a new picture twelve times a second (animated "on twos")
 const RENDER_FPS = 24; // the camera moves on ones, as a motion-control rig would shoot it
-const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk"];
+const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk", "away_q3", "away_side"];
 /** Which turnaround picture shows a figure at this angle away from the lens. */
 const viewOf = (rel: number) => (Math.abs(rel) < 0.42 ? "front" : Math.abs(rel) < 1.15 ? "q3" : "side");
 
@@ -907,11 +907,19 @@ export class Stage {
    * Dress the puppet for this frame: the turnaround view it has toward the lens (a turned figure that is talking
    * shows its talking view), mirrored when it faces the other way.
    */
-  private dress(f: Figure, still: boolean, rel: number) {
+  private dress(f: Figure, asleep: boolean, waking: boolean, rel: number) {
     const K = this.resolveKey(f, f.frameKey);
-    const view = still ? "front" : viewOf(rel);
-    const open = f.speaking && (f.mouthFrame === "talk_a" || f.mouthFrame === "talk_b" || f.mouthFrame.endsWith("_b"));
-    const key = view === "front" ? K : open && f.poses.has(`${view}_talk`) ? `${view}_talk` : f.poses.has(view) ? view : K;
+    let view: "front" | "q3" | "side" = waking ? "front" : viewOf(rel);
+    let key: string;
+    if (asleep && !waking) {
+      // slumped over the table it faces: the sleeping view from where the lens is, so a friend at the side lies down
+      // toward the table in profile instead of bowing to you (front view when this figure has no turned sleep)
+      key = K === "away" && view !== "front" && f.poses.has(`away_${view}`) ? `away_${view}` : K;
+      if (key === K) view = "front";
+    } else {
+      const open = f.speaking && (f.mouthFrame === "talk_a" || f.mouthFrame === "talk_b" || f.mouthFrame.endsWith("_b"));
+      key = view === "front" ? K : open && f.poses.has(`${view}_talk`) ? `${view}_talk` : f.poses.has(view) ? view : K;
+    }
     // a view faces the right of the picture; mirror it when this figure faces the other way
     const mirror = view !== "front" && rel > 0;
     const sig = `${key}|${mirror}`;
@@ -1033,9 +1041,12 @@ export class Stage {
       // puppet's turnaround)
       const rel = wrapPi(this.yawTo(f.group.position, this.camPos) - f.yaw);
       f.rig.rotation.y = rel;
-      this.dress(f, asleep || f.wake > 0, rel);
+      this.dress(f, asleep, f.wake > 0, rel);
       // name card on the figure's own chest, so it can only ever sit on its own figure (and never on the cake)
-      v.copy(f.group.position).setY(FIG_H * 0.7).project(this.camera);
+      // a sleeper's card sits on its back, bent toward the table, not where an upright chest would be
+      v.copy(f.group.position);
+      if (asleep) v.set(v.x * 0.85, 0, v.z * 0.85);
+      v.setY(FIG_H * (asleep ? 0.42 : 0.7)).project(this.camera);
       const onScreen = v.z < 1 && v.x > -1.1 && v.x < 1.1;
       f.label.style.left = `${((v.x + 1) / 2) * w}px`;
       f.label.style.top = `${((1 - v.y) / 2) * h}px`;
