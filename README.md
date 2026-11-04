@@ -1,4 +1,4 @@
-> **Disclosure.** I prototyped this idea before the hackathon: *Scene* ([github.com/nkm1020/UJHS-Ambition-for-Korea](https://github.com/nkm1020/UJHS-Ambition-for-Korea), created Oct 24, 2026 — a 3D motion-engine prototype with r3f avatars and a voice-clone experiment). That repository stays public. **This repository was started on Nov 3, 2026 (first commit 09:35 KST; published to GitHub on Nov 4) and reuses none of its code or assets.** Everything here — the figure pipeline (Muse Image, SAM 3.1, SAM 3D), the Spark director and its validator, the Voice Transcribe checks, the 3D table stage, the chat backend and the web app — was written Nov 3–5, 2026. What carried over is the idea: chat performed by your friends in their own voices.
+> **Disclosure.** I prototyped this idea before the hackathon: *Scene* ([github.com/nkm1020/UJHS-Ambition-for-Korea](https://github.com/nkm1020/UJHS-Ambition-for-Korea), created Oct 24, 2026 — a 3D motion-engine prototype with r3f avatars and a voice-clone experiment). That repository stays public. **This repository was started on Nov 3, 2026 (first commit 09:35 KST; published to GitHub on Nov 5) and reuses none of its code or assets.** Everything here — the figure pipeline (Muse Image, SAM 3.1, SAM 3D), the Spark director and its validator, the Voice Transcribe checks, the 3D table stage, the chat backend and the web app — was written Nov 3–5, 2026. What carried over is the idea: chat performed by your friends in their own voices.
 
 # Scene: your group chat, performed
 
@@ -7,7 +7,7 @@ A group chat with a new layout. You make yourself once (a name, your own voice, 
 Theme: **Build for Your World** · Track: Indie Developer · Meta AI Developer Hackathon 2026
 
 **Live:** [scene-lovat.vercel.app](https://scene-lovat.vercel.app) (open the app, make yourself, then the demo chat is waiting; open a second browser to be your own friend)
-<!-- DEMO-LINKS -->
+**Demo video (3 min):** [youtube.com/watch?v=dQHUkrmbMu8](https://www.youtube.com/watch?v=dQHUkrmbMu8) (the replay and its summary, making yourself, adding real friends, a real three-person chat with every line read back, a room said into being)
 
 ## Where Meta's models are the product
 
