@@ -513,8 +513,8 @@ export class Stage {
   private camera: THREE.PerspectiveCamera;
   private camPos = new THREE.Vector3(0, EYE_Y, 0.7);
   private look = new THREE.Vector3(0, TABLE_Y + 0.1, -0.3);
-  private baseFov = 56;
-  private fov = 56;
+  private baseFov = 30;
+  private fov = 30;
   private shotCamera: Camera = "room";
   /** The camera move in progress: an S curve from where the camera was to the new shot (times in ms). */
   private move = { t0: 0, dur: 0, p0: new THREE.Vector3(), v0: new THREE.Vector3(), p1: new THREE.Vector3(0, TABLE_Y + 0.1, -0.3), f0: 56, fv0: 0, f1: 56 };
@@ -640,8 +640,9 @@ export class Stage {
     this.composer?.setPixelRatio(this.renderer.getPixelRatio());
     this.composer?.setSize(w, h);
     this.camera.aspect = w / h;
-    // portrait phones get a taller view so the speaker fits; landscape sees most of the table at once
-    this.baseFov = w / h >= 1 ? 56 : 58;
+    // a normal lens from further back, not a wide one up close: straight lines stay straight, faces keep their shape
+    // (portrait phones get a little more height so the speaker fits)
+    this.baseFov = w / h >= 1 ? 34 : 42;
     this.shot(this.focus, this.shotCamera, this.focusTo, true); // a new frame size cuts straight to the shot
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
@@ -694,7 +695,7 @@ export class Stage {
     this.buildTable();
     const { rSeat, angles } = this.ring;
     // the viewer sits at +z looking toward −z; the others go from the viewer's left around to the right
-    this.camPos.set(0, EYE_Y, rSeat + 0.3); // sitting back in the chair, so the seats beside you come into view
+    this.camPos.set(0, EYE_Y, rSeat + 1.05); // pulled back behind your chair, so a normal lens takes in the seats beside you
     others.forEach((m, i) => {
       const a = -angles[i];
       const seat = new THREE.Vector3(Math.sin(a) * rSeat, 0, Math.cos(a) * rSeat);
