@@ -4,7 +4,7 @@
 //               Up to 3 synthesis attempts; then the line plays as captions only, flagged voice_unverified.
 
 import { transcribe } from "./meta";
-import { synthesize, presetFor, type Voice } from "./tts";
+import { synthesize, voiceForPreset, type Voice } from "./tts";
 import { similarity, isSilent, guessLanguage } from "./text";
 import { toVtWav, silenceRatio, durationMs, decodeWav, rmsEnvelope } from "./wav";
 import type { Ledger } from "./ledger";
@@ -68,19 +68,19 @@ export type VoiceSpec = Voice | { presetKey: string };
 export async function renderVoice(
   text: string,
   spec: VoiceSpec | null,
-  opts: { ledger?: Ledger; forceFirstFail?: boolean } = {},
+  opts: { ledger?: Ledger; forceFirstFail?: boolean; mood?: string } = {},
 ): Promise<VoiceRender> {
   if (isSilent(text)) return { status: "silent", wav: null, durationMs: 0, envelope: [], attempts: [], similarity: 1, heard: "", flags: ["emoji_only"] };
   if (!spec) return { status: "captions_only", wav: null, durationMs: 0, envelope: [], attempts: [], similarity: 0, heard: "", flags: ["voice_disabled"] };
   const language = guessLanguage(text);
-  const voice: Voice = "presetKey" in spec ? { preset: presetFor(spec.presetKey, language) } : spec;
+  const voice: Voice = "presetKey" in spec ? voiceForPreset(spec.presetKey, language) : spec;
   const attempts: RenderAttempt[] = [];
   for (let attempt = 1; attempt <= MAX_SYNTH_ATTEMPTS; attempt++) {
     const seed = 1000 + attempt * 7919;
     const speed = attempt === 1 ? undefined : 0.95;
     let ttsMs = 0, vtMs = 0;
     try {
-      const tts = await synthesize(text, voice, { language, seed, speed, ledger: opts.ledger, op: "message.tts" });
+      const tts = await synthesize(text, voice, { language, seed, speed, mood: opts.mood, ledger: opts.ledger, op: "message.tts" });
       ttsMs = tts.ms;
       const norm = toVtWav(tts.wav);
       const t = await transcribe(norm.wav, { op: "message.readback", ledger: opts.ledger });

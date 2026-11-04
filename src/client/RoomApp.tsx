@@ -89,6 +89,7 @@ export default function RoomApp({ roomId, door = false }: { roomId: string; door
   const [doors, setDoors] = useState<"closed" | "opening" | null>(door ? "closed" : null);
   const [roomSheet, setRoomSheet] = useState(false);
   const [scriptNote, setScriptNote] = useState(true);
+  const [summary, setSummary] = useState<{ headline: string; points: string[]; lines: number; tries: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creds, setCreds] = useState<Creds | null>(null);
   const [joined, setJoined] = useState(false);
@@ -291,6 +292,7 @@ export default function RoomApp({ roomId, door = false }: { roomId: string; door
     const segment = state.messages.filter((m) => m.seq > seen);
     if (!segment.length) return;
     setMode("directing");
+    setSummary(null);
     setDirectorNote(`Muse Spark is directing ${Math.min(segment.length, 40)} lines…`);
     try {
       const res = await api(`/api/rooms/${roomId}/replay`, { method: "POST", json: { afterSeq: seen, present: [...present] } });
@@ -314,6 +316,7 @@ export default function RoomApp({ roomId, door = false }: { roomId: string; door
       });
       (window as any).__sceneCtl = ctl;
       await ctl.done;
+      if (res.summary) setSummary({ ...res.summary, lines: items.length, tries: res.summaryLog?.length ?? 1 });
       const maxSeq = Math.max(...s.messages.map((m) => m.seq));
       setLastSeen(roomId, maxSeq);
       setSeen(maxSeq);
@@ -439,7 +442,25 @@ export default function RoomApp({ roomId, door = false }: { roomId: string; door
             <button onClick={() => (window as any).__sceneCtl?.skip()}>Skip</button>
           </div>
         )}
-        {mode === "idle" && missed.length === 0 && directorNote && (
+        {mode === "idle" && summary && (
+          <section className="summary-card" aria-label="What you missed">
+            <header>
+              <span className="edge">
+                What you missed · {summary.lines} lines · Spark summary · checked{summary.tries > 1 ? ` on try ${summary.tries}` : ""}
+              </span>
+              <button className="icon-btn" onClick={() => setSummary(null)} aria-label="Close the summary">
+                <Icon name="close" />
+              </button>
+            </header>
+            <p className="headline">{summary.headline}</p>
+            <ul>
+              {summary.points.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {mode === "idle" && !summary && missed.length === 0 && directorNote && (
           <div className="slate fade" role="status">
             <span className="edge">{directorNote}</span>
           </div>

@@ -17,7 +17,7 @@ import { Ledger } from "../src/core/ledger";
 import { createFigureBase, createFigurePoses, FIGURE_POSES, type FigurePoseAsset } from "../src/core/figure";
 import { directSegment, type Direction } from "../src/core/director";
 import { renderVoice, verifyEnrollment, type VoiceRender, type VoiceSpec } from "../src/core/voice";
-import { ttsEndpoint, ttsConcurrency, type Voice } from "../src/core/tts";
+import { ttsEndpoint, ttsProvider, ttsConcurrency, type Voice } from "../src/core/tts";
 import { SEED_MEMBERS, SEED_MESSAGES, ENROLL_SENTENCES } from "../src/core/seed";
 import { buildReplayHtml, dataUrl } from "../src/core/export";
 import type { PerformItem } from "../src/stage3d/engine";
@@ -57,8 +57,8 @@ async function main() {
   mkdirSync(path.join(OUT, "figures"), { recursive: true });
 
   const voiceOn = !flag("voice") || opt("voice") !== "none";
-  const tts = voiceOn ? ttsEndpoint() : null;
-  log(`Scene demo · room "wrong chat" · ${SEED_MESSAGES.length} missed messages · voice: ${tts ? "Qwen3-TTS " + tts : "off (captions)"}`);
+  const tts = voiceOn ? (ttsProvider() === "openai" ? "OpenAI gpt-4o-mini-tts" : ttsEndpoint()) : null;
+  log(`Scene demo · room "wrong chat" · ${SEED_MESSAGES.length} missed messages · voice: ${tts ? (tts.startsWith("OpenAI") ? tts : "Qwen3-TTS " + tts) : "off (captions)"}`);
 
   // 1) Figures
   const lift = !!process.env.FAL_KEY;
@@ -107,7 +107,8 @@ async function main() {
     const check = await verifyEnrollment(readFileSync(enrollPath), shown, { ledger });
     enrollment = { ok: check.ok, similarity: check.similarity, heard: check.heard, durationMs: check.durationMs, silence: check.silence, reasons: check.reasons };
     log(`  read-back ${check.similarity.toFixed(2)} (need ≥0.80), ${(check.durationMs / 1000).toFixed(1)} s, silence ${(check.silence * 100).toFixed(0)}% → ${check.ok ? "ENROLLED" : "rejected: " + check.reasons.join("; ")}`);
-    if (check.ok) voices.set("sam", { ref_audio_b64: check.wav.toString("base64"), ref_text: shown.join(" ") });
+    // only the self-hosted Qwen3-TTS clones a voice; OpenAI speaks with Sam's preset
+    if (check.ok && ttsProvider() === "qwen") voices.set("sam", { ref_audio_b64: check.wav.toString("base64"), ref_text: shown.join(" ") });
   } else {
     log(`\n[2/4] Voice enrollment: skipped (${tts ? "no --enroll recording" : "voice off"}); unenrolled members use preset voices`);
   }

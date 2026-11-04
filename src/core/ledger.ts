@@ -7,7 +7,8 @@ export type Model =
   | "sam-3.1"
   | "muse-voice-transcribe-1.0"
   | "sam-3d-objects"
-  | "qwen3-tts";
+  | "qwen3-tts"
+  | "gpt-4o-mini-tts";
 
 export interface LedgerEntry {
   model: Model;
@@ -33,6 +34,8 @@ export const PRICE = {
   sam3dPerObject: 0.02,
   // Modal L4 ≈ $0.80/h; billed per GPU-second of generation.
   ttsGpuPerHour: 0.8,
+  // OpenAI gpt-4o-mini-tts: about $0.015 per minute of speech (text in + audio out).
+  openaiTtsPerMinute: 0.015,
 } as const;
 
 export function sparkCost(inputTokens: number, outputTokens: number): number {

@@ -2,15 +2,16 @@ import "server-only";
 import { Ledger } from "@/core/ledger";
 import { ruleDirection } from "@/core/director";
 import { renderVoice, type VoiceSpec } from "@/core/voice";
-import { ttsEndpoint } from "@/core/tts";
+import { ttsProvider } from "@/core/tts";
 import { db, publicUrl, saveLedger } from "./db";
 import { assertDailySpend } from "./quota";
 
-/** Voice for a member: enrolled reference (private bucket) or preset. Null when TTS is off. */
+/** Voice for a member: enrolled reference (private bucket, Qwen3-TTS clones it) or preset. Null when TTS is off. */
 export async function memberVoice(memberId: string): Promise<VoiceSpec | null> {
-  if (!ttsEndpoint()) return null;
+  const provider = ttsProvider();
+  if (!provider) return null;
   const { data: m } = await db().from("members").select("preset, enrolled_voice").eq("id", memberId).single();
-  if (m?.enrolled_voice) {
+  if (m?.enrolled_voice && provider === "qwen") {
     const { data: s } = await db().from("member_secrets").select("voice_path, voice_text").eq("member_id", memberId).single();
     if (s?.voice_path && s.voice_text) {
       const { data: blob } = await db().storage.from("voices").download(s.voice_path);
@@ -35,7 +36,7 @@ export async function renderMessage(msg: { id: string; room_id: string; member_i
     } catch {
       voice = null; // over today's budget: captions only, flagged
     }
-    const r = await renderVoice(msg.text, voice, { ledger });
+    const r = await renderVoice(msg.text, voice, { ledger, mood: d.emotion });
     let audio_url: string | null = null;
     if (r.wav) {
       const path = `${msg.room_id}/${msg.id}.wav`;

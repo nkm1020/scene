@@ -4,10 +4,12 @@ import { db, saveLedger, jsonError } from "@/server/db";
 import { assertDailySpend, assertRoomOp } from "@/server/quota";
 import { renderMessage } from "@/server/render";
 import { castHere } from "@/core/cast";
+import { summarizeSegment } from "@/core/summary";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 // Missed segment → Muse Spark directs it in one call → validate_directions → stored per message.
+// Beside it, Spark sums the segment up for after the show (validateSummary checks it).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ledger = new Ledger();
   const { id } = await params;
@@ -43,6 +45,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await new Promise((r) => setTimeout(r, 1000));
       }
     })();
+    const summaryRun = summarizeSegment(
+      segment.map((m: any) => ({ name: m.members?.name ?? "someone", text: m.text })),
+      { ledger },
+    ).catch((e) => ({ summary: null, log: [{ ok: false, errors: [String(e?.message ?? e).slice(0, 120)], ms: 0 }] }));
     const run = await directSegment(
       segment.map((m: any) => ({ id: m.id, sender_id: m.member_id, sender_name: m.members?.name, text: m.text })),
       { ledger, reasoningEffort: "minimal", roster },
@@ -56,7 +62,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ),
     );
     await renderAll;
-    return Response.json({ directions: run.directions, log: run.log, source: run.source, flags: run.flags, usd: ledger.summary().usd });
+    const sum = await summaryRun;
+    return Response.json({ directions: run.directions, log: run.log, source: run.source, flags: run.flags, summary: sum.summary, summaryLog: sum.log, usd: ledger.summary().usd });
   } catch (e) {
     return jsonError(e);
   } finally {

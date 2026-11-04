@@ -8,11 +8,11 @@ import { Ledger } from "../src/core/ledger";
 import { SEED_MEMBERS, SEED_MESSAGES } from "../src/core/seed";
 import { directSegment } from "../src/core/director";
 import { renderVoice } from "../src/core/voice";
-import { ttsEndpoint } from "../src/core/tts";
+import { ttsProvider } from "../src/core/tts";
 
 const TPL = "demo-template";
 const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
-const voiceOn = !process.argv.includes("--no-voice") && !!ttsEndpoint();
+const voiceOn = !process.argv.includes("--no-voice") && !!ttsProvider();
 const ledger = new Ledger();
 
 await db.from("rooms").delete().eq("id", TPL);

@@ -1,19 +1,32 @@
-// Client for the Qwen3-TTS service (Modal in production, local server in dev).
-// The service contract lives in tts/modal_app.py.
+// Text to speech. Meta has no TTS, so speaking is an external, replaceable piece: the self-hosted Qwen3-TTS service
+// (Modal or a local server; contract in tts/modal_app.py; clones a registered voice), or OpenAI gpt-4o-mini-tts
+// (preset voices, told the line's mood). Whichever speaks, Voice Transcribe reads every line back before it plays.
 
 import { Agent, fetch as undiciFetch } from "undici";
-import { ttsCost, type Ledger, globalLedger } from "./ledger";
+import { ttsCost, PRICE, type Ledger, globalLedger } from "./ledger";
+import { encodeWav, durationMs as pcmMs } from "./wav";
 
 // Node's fetch gives up after 300 s without response headers; a laptop TTS server can take longer.
 let localAgent: Agent | null = null;
 
-export type Voice = { preset: string } | { ref_audio_b64: string; ref_text: string };
+export type Voice = { preset: string } | { ref_audio_b64: string; ref_text: string } | { openai: string };
 
 export interface TtsResult {
   wav: Buffer;
   durationMs: number;
   genMs: number;
   ms: number;
+}
+
+export type TtsProvider = "qwen" | "openai";
+
+/** Who speaks: TTS_PROVIDER if set, else the Qwen service when its URL is set, else OpenAI when a key is set. */
+export function ttsProvider(): TtsProvider | null {
+  const want = process.env.TTS_PROVIDER;
+  if (want === "openai" && process.env.OPENAI_API_KEY) return "openai";
+  if (want === "qwen" && ttsEndpoint()) return "qwen";
+  if (ttsEndpoint()) return "qwen";
+  return process.env.OPENAI_API_KEY ? "openai" : null;
 }
 
 export function ttsEndpoint(): string | null {
@@ -49,6 +62,54 @@ export function presetFor(key: string | null | undefined, language: "ko" | "en" 
   return p[language];
 }
 
+/** The same four presets as OpenAI voices (these speak Korean and English alike). */
+export const OPENAI_PRESETS: Record<string, string> = { female_a: "coral", female_b: "nova", male: "ash", male_b: "verse" };
+
+/** A preset voice from whichever provider is speaking. */
+export function voiceForPreset(key: string | null | undefined, language: "ko" | "en" = "en"): Voice {
+  if (ttsProvider() === "openai") return { openai: OPENAI_PRESETS[key ?? ""] ?? OPENAI_PRESETS.female_a };
+  return { preset: presetFor(key, language) };
+}
+
+const MOOD: Record<string, string> = {
+  neutral: "relaxed",
+  happy: "cheerful",
+  laughing: "amused, close to laughing",
+  surprised: "surprised",
+  angry: "annoyed",
+  sad: "a little down",
+};
+
+/** OpenAI gpt-4o-mini-tts: a preset voice, told how the line feels (the staging's expression), never what to say. */
+async function openaiSpeech(text: string, voice: string, mood: string | undefined, opts: { ledger: Ledger; op?: string }): Promise<TtsResult> {
+  const t0 = performance.now();
+  const res = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-mini-tts",
+      voice,
+      input: ttsText(text),
+      instructions: `A short line in a casual group chat between close friends, said ${MOOD[mood ?? "neutral"] ?? MOOD.neutral}. Say exactly the words given and nothing else.`,
+      response_format: "pcm", // 24 kHz mono s16le; wrapped as WAV here
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const ms = Math.round(performance.now() - t0);
+  if (!res.ok) {
+    opts.ledger.add({ model: "gpt-4o-mini-tts", op: opts.op ?? "tts.synthesize", ms, usd: 0, ok: false, note: `HTTP ${res.status}` });
+    throw new Error(`openai tts failed: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
+  }
+  const raw = Buffer.from(await res.arrayBuffer());
+  const samples = new Float32Array(raw.length >> 1);
+  for (let i = 0; i < samples.length; i++) samples[i] = raw.readInt16LE(i * 2) / 32768;
+  const pcm = { sampleRate: 24000, samples };
+  const wav = encodeWav(pcm);
+  const durationMs = pcmMs(pcm);
+  opts.ledger.add({ model: "gpt-4o-mini-tts", op: opts.op ?? "tts.synthesize", ms, usd: (durationMs / 60_000) * PRICE.openaiTtsPerMinute, ok: true, audioMs: durationMs, note: voice });
+  return { wav, durationMs, genMs: ms, ms };
+}
+
 const EMOJI = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu;
 const KEEP_CAPS = new Set(["OK", "AM", "PM", "TV", "ID", "UK", "US", "AI"]);
 
@@ -64,8 +125,9 @@ export function ttsText(text: string): string {
 export async function synthesize(
   text: string,
   voice: Voice,
-  opts: { language?: "ko" | "en" | "auto"; seed?: number; speed?: number; ledger?: Ledger; op?: string } = {},
+  opts: { language?: "ko" | "en" | "auto"; seed?: number; speed?: number; mood?: string; ledger?: Ledger; op?: string } = {},
 ): Promise<TtsResult> {
+  if ("openai" in voice) return openaiSpeech(text, voice.openai, opts.mood, { ledger: opts.ledger ?? globalLedger, op: opts.op });
   const base = ttsEndpoint();
   if (!base) throw new Error("TTS_URL is not set (voice synthesis disabled)");
   const ledger = opts.ledger ?? globalLedger;
