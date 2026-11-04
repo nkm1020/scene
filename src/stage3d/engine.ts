@@ -718,6 +718,7 @@ export class Stage {
     this.scene.add(group);
     const label = document.createElement("div");
     label.className = "s3-name";
+    label.dataset.m = member.id;
     label.textContent = member.name;
     this.root.appendChild(label);
     const bubble = document.createElement("div");
@@ -1005,8 +1006,8 @@ export class Stage {
       const rel = wrapPi(this.yawTo(f.group.position, this.camPos) - f.yaw);
       f.rig.rotation.y = rel;
       this.dress(f, asleep || f.wake > 0, rel);
-      // name card at the figure's own lap, so it can only ever sit on its own figure
-      v.copy(f.group.position).multiplyScalar(1 - 0.06 / rSeat).setY(TABLE_Y + 0.02).project(this.camera);
+      // name card on the figure's own chest, so it can only ever sit on its own figure (and never on the cake)
+      v.copy(f.group.position).setY(FIG_H * 0.7).project(this.camera);
       const onScreen = v.z < 1 && v.x > -1.1 && v.x < 1.1;
       f.label.style.left = `${((v.x + 1) / 2) * w}px`;
       f.label.style.top = `${((1 - v.y) / 2) * h}px`;

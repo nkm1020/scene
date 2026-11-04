@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createStage, type Stage, type PerformItem, type StageMember, type FigureAssets } from "@/stage3d/engine";
+import { createStage, itemDuration, type Stage, type PerformItem, type StageMember, type FigureAssets } from "@/stage3d/engine";
 import { ruleAddressee, ruleDirection } from "@/core/rules";
 import { browserDb } from "./supabase";
 import { api, loadCreds, saveCreds, lastSeen, setLastSeen, type Creds } from "./api";
@@ -67,6 +67,17 @@ function toItem(m: Message, r: Render | undefined, roster?: { member_id: string;
   };
 }
 
+/** One ribbon colour per person at the table, the same on their name card and their frames. */
+const RIBBONS = ["#8fd18a", "#ff9a76", "#8ec5ff", "#d7a6ff", "#6fd3c6", "#f7a8c8"];
+const ribbonOf = (members: { id: string }[], id: string) => RIBBONS[Math.max(0, members.findIndex((m) => m.id === id)) % RIBBONS.length];
+
+/** Running time as the edge print shows it: 2.4 s, or 1:05 past a minute. */
+function runTime(ms: number) {
+  const s = ms / 1000;
+  return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+}
+const frameNo = (seq: number) => String(seq).padStart(3, "0");
+
 export default function RoomApp({ roomId }: { roomId: string }) {
   const [state, setState] = useState<RoomState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +91,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   const [friends, setFriends] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [progress, setProgress] = useState<{ i: number; n: number } | null>(null);
+  const [playing, setPlaying] = useState<string | null>(null); // the message on stage right now
   const stageHost = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const liveQueue = useRef<PerformItem[]>([]);
@@ -137,12 +149,14 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     const item = liveQueue.current.shift();
     if (!item) return;
     busy.current = true;
+    setPlaying(item.messageId);
     try {
       const ctl = stage.current.play([{ ...item, pauseMs: 150 }], {});
       await ctl.done;
       setLiveSeen((prev) => new Set(prev).add(item.messageId));
     } finally {
       busy.current = false;
+      setPlaying(null);
       void pump();
     }
   }, [roomId]);
@@ -215,6 +229,9 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     [state, seen, creds, liveSeen],
   );
 
+  const renderOf = useMemo(() => new Map((state?.renders ?? []).map((r) => [r.message_id, r])), [state?.renders]);
+  const missedMs = useMemo(() => missed.reduce((t, m) => t + itemDuration(toItem(m, renderOf.get(m.id))), 0), [missed, renderOf]);
+
   const playMissed = async () => {
     if (!stage.current || !state) return;
     stage.current.unlockAudio();
@@ -227,14 +244,21 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       const last = res.log?.at(-1);
       setDirectorNote(
         res.source === "spark"
-          ? `Spark directed · validator ✓${res.log.length > 1 ? ` (try ${res.log.length})` : ""}${last ? ` · ${(last.ms / 1000).toFixed(1)} s` : ""}`
-          : `Rule-table fallback (${(res.flags ?? []).join(", ")})`,
+          ? `Spark directed · checked${res.log.length > 1 ? ` on try ${res.log.length}` : ""}${last ? ` · ${(last.ms / 1000).toFixed(1)} s` : ""}`
+          : `Rule table (${(res.flags ?? []).join(", ")})`,
       );
       const s = await reload();
       const byId = new Map(s.renders.map((r) => [r.message_id, r]));
       const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id), roster(), s.messages));
       setMode("replaying");
-      const ctl = stage.current.play(items, { speed, onItem: (i) => setProgress({ i: i + 1, n: items.length }) });
+      const ctl = stage.current.play(items, {
+        speed,
+        onItem: (i) => {
+          setProgress({ i: i + 1, n: items.length });
+          setPlaying(items[i].messageId);
+          setLiveSeen((prev) => new Set(prev).add(items[i].messageId)); // a missed frame develops as it plays
+        },
+      });
       (window as any).__sceneCtl = ctl;
       await ctl.done;
       const maxSeq = Math.max(...s.messages.map((m) => m.seq));
@@ -245,6 +269,22 @@ export default function RoomApp({ roomId }: { roomId: string }) {
     } finally {
       setMode("idle");
       setProgress(null);
+      setPlaying(null);
+      void pump();
+    }
+  };
+
+  // tap a frame on the strip: the table performs that one line again
+  const replayOne = async (m: Message) => {
+    if (!stage.current || !state || busy.current || modeRef.current !== "idle") return;
+    stage.current.unlockAudio();
+    busy.current = true;
+    setPlaying(m.id);
+    try {
+      await stage.current.play([{ ...toItem(m, renderOf.get(m.id), roster(), state.messages), pauseMs: 150 }], {}).done;
+    } finally {
+      busy.current = false;
+      setPlaying(null);
       void pump();
     }
   };
@@ -280,14 +320,16 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       />
     );
 
+  const ribbonCss = state.members.map((m) => `.room .s3-name[data-m="${m.id}"]{--rib:${ribbonOf(state.members, m.id)}}`).join("");
   return (
     <div className="room">
+      <style>{ribbonCss}</style>
       <header className="room-top">
         <div className="room-id">
           <Mark label={false} />
           <div>
             <div className="room-name">{state.room.name}</div>
-            <div className="room-sub num">
+            <div className="room-sub edge">
               {state.members.length} at the table · {present.size} here
             </div>
           </div>
@@ -305,34 +347,44 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         {mode === "idle" && missed.length > 0 && (
           <button className="missed-pill" onClick={playMissed}>
             <Icon name="play" />
-            <span>
-              <b>{missed.length}</b> missed · Play
-            </span>
+            <span className="what">Play {missed.length} missed</span>
+            <span className="edge">{runTime(missedMs)}</span>
           </button>
         )}
-        {mode === "directing" && <div className="director-note pulse">{directorNote}</div>}
+        {mode === "directing" && (
+          <div className="slate directing" role="status">
+            <span className="edge">{directorNote}</span>
+          </div>
+        )}
         {mode === "replaying" && (
-          <div className="replay-ctl">
-            <span className="director-note">
-              {progress ? `${progress.i}/${progress.n} · ` : ""}
+          <div className="slate" role="status">
+            <span className="edge">
+              {progress && (
+                <b>
+                  {progress.i}/{progress.n}
+                </b>
+              )}
+              {progress ? " · " : ""}
               {directorNote}
             </span>
             <button
-              className="ghost small"
               onClick={() => {
                 const s = speed === 1 ? 1.25 : 1;
                 setSpeed(s);
                 (window as any).__sceneCtl?.setSpeed(s);
               }}
+              aria-label="Playback speed"
             >
               {speed === 1 ? "1×" : "1.25×"}
             </button>
-            <button className="ghost small" onClick={() => (window as any).__sceneCtl?.skip()}>
-              Skip
-            </button>
+            <button onClick={() => (window as any).__sceneCtl?.skip()}>Skip</button>
           </div>
         )}
-        {mode === "idle" && missed.length === 0 && directorNote && <div className="director-note fade">{directorNote}</div>}
+        {mode === "idle" && missed.length === 0 && directorNote && (
+          <div className="slate fade" role="status">
+            <span className="edge">{directorNote}</span>
+          </div>
+        )}
         {state.members.length <= 1 && (
           <div className="empty-room">
             <p>You sit here, at the camera. Seat a friend and they appear across the table.</p>
@@ -342,9 +394,173 @@ export default function RoomApp({ roomId }: { roomId: string }) {
           </div>
         )}
       </div>
-      <Composer creds={creds} me={me} onSent={() => void 0} disabled={mode !== "idle"} />
+      <FilmStrip
+        messages={state.messages}
+        members={state.members}
+        renderOf={renderOf}
+        meId={creds.memberId}
+        missed={missed}
+        playing={playing}
+        canReplay={mode === "idle"}
+        lineTo={(m) => addressee(m, renderOf.get(m.id), roster(), state.messages)}
+        onReplay={(m) => void replayOne(m)}
+      />
+      <Composer creds={creds} me={me} ribbon={ribbonOf(state.members, creds.memberId)} onSent={() => void 0} disabled={mode !== "idle"} />
       {friends && <FriendsSheet roomId={roomId} creds={creds} members={state.members} onClose={() => setFriends(false)} onAdded={() => void reload()} />}
       {settings && <Settings roomId={roomId} creds={creds} me={me} onClose={() => setSettings(false)} onChanged={() => void reload()} />}
+    </div>
+  );
+}
+
+// ───────────────────────────── The strip: the chat as numbered frames, pulled up from under the stage ─────────────────────────────
+
+const PEEK = 60;
+
+function FilmStrip({
+  messages,
+  members,
+  renderOf,
+  meId,
+  missed,
+  playing,
+  canReplay,
+  lineTo,
+  onReplay,
+}: {
+  messages: Message[];
+  members: Member[];
+  renderOf: Map<string, Render>;
+  meId: string;
+  missed: Message[];
+  playing: string | null;
+  canReplay: boolean;
+  lineTo: (m: Message) => string;
+  onReplay: (m: Message) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dragH, setDragH] = useState<number | null>(null);
+  const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
+  const list = useRef<HTMLOListElement>(null);
+  const missedIds = useMemo(() => new Set(missed.map((m) => m.id)), [missed]);
+  const nameOf = (id: string) => (id === meId ? "You" : members.find((m) => m.id === id)?.name ?? "Someone");
+  const openH = () => Math.min(window.innerHeight * 0.72, 640);
+  const last = messages.at(-1);
+  const shown = (playing && messages.find((m) => m.id === playing)) || last;
+
+  // opening lands on the newest frame; while it plays, the frame on stage stays in view
+  useEffect(() => {
+    if (open && list.current) list.current.scrollTop = list.current.scrollHeight;
+  }, [open]);
+  useEffect(() => {
+    if (!open || !playing) return;
+    list.current?.querySelector(`[data-id="${playing}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [open, playing]);
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [open]);
+
+  const height = dragH ?? (open ? openH() : PEEK);
+  return (
+    <div className="strip">
+      <div className={`strip-sheet ${open ? "open" : ""} ${dragH !== null ? "dragging" : ""}`} style={{ height }}>
+        <button
+          className="strip-head"
+          aria-expanded={open}
+          aria-label={open ? "Close the chat" : "Open the chat"}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            drag.current = { y: e.clientY, h: open ? openH() : PEEK, moved: false };
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            const dy = d.y - e.clientY;
+            if (!d.moved && Math.abs(dy) < 6) return;
+            d.moved = true;
+            setDragH(Math.max(PEEK, Math.min(openH(), d.h + dy)));
+          }}
+          onPointerUp={() => {
+            const d = drag.current;
+            drag.current = null;
+            if (!d) return;
+            if (!d.moved) setOpen((o) => !o);
+            else setOpen((dragH ?? PEEK) > (PEEK + openH()) / 2);
+            setDragH(null);
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            setDragH(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setOpen((o) => !o);
+            }
+          }}
+        >
+          {open || !shown ? (
+            <span className="peek">
+              <span className="edge">Chat</span>
+              <span className="edge count">
+                {messages.length} frames{missed.length > 0 && (
+                  <>
+                    {" · "}
+                    <b>{missed.length} missed</b>
+                  </>
+                )}
+              </span>
+            </span>
+          ) : (
+            <span className="peek" style={{ ["--rib" as any]: ribbonOf(members, shown.member_id) }}>
+              <span className="edge">{frameNo(shown.seq)}</span>
+              <span className="edge who">{nameOf(shown.member_id)}</span>
+              <span className="line">{shown.text}</span>
+            </span>
+          )}
+          <Icon name="chevron" />
+        </button>
+        <ol className="frames" ref={list} aria-label="The chat, oldest first" hidden={!open && dragH === null}>
+          {messages.length === 0 && <li className="empty">Nothing said yet. Hold to talk, or type, and the table performs it.</li>}
+          {messages.map((m) => {
+            const r = renderOf.get(m.id);
+            const item = toItem(m, r);
+            const to = lineTo(m);
+            const status = !r || r.status === "pending" ? "Developing" : r.status === "verified" ? "Voice checked" : r.status === "silent" ? "Silent" : "Captions only";
+            const direction = [r?.emotion !== "neutral" && r?.emotion, r?.gesture !== "none" && r?.gesture, r?.camera !== "room" && r?.camera && `${r.camera} shot`]
+              .filter(Boolean)
+              .map((x) => String(x).replace(/_/g, " "));
+            return (
+              <li key={m.id} data-id={m.id} style={{ ["--rib" as any]: ribbonOf(members, m.member_id) }}>
+                <button
+                  className={`frame ${missedIds.has(m.id) ? "missed" : ""} ${playing === m.id ? "playing" : ""}`}
+                  disabled={!canReplay || !!playing}
+                  onClick={() => onReplay(m)}
+                  aria-label={`${nameOf(m.member_id)}: ${m.text}. Play this line again`}
+                >
+                  <span className="edge-row edge">
+                    <span className="fno">{frameNo(m.seq)}</span>
+                    <span className="who">{nameOf(m.member_id)}</span>
+                    <span className="to">to {to === "all" ? "everyone" : to === meId ? "you" : nameOf(to)}</span>
+                    <span className="t">{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+                  </span>
+                  <span className="line" style={{ display: "block" }}>
+                    {m.text}
+                  </span>
+                  <span className="edge-row meta edge">
+                    {missedIds.has(m.id) && <span className="miss">Missed</span>}
+                    <span className={r?.status === "verified" ? "ok" : ""}>{status}</span>
+                    <span>{runTime(itemDuration(item))}</span>
+                    {direction.length > 0 && <span>{direction.join(" · ")}</span>}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
     </div>
   );
 }
@@ -433,7 +649,7 @@ function FriendsSheet({ roomId, creds, members, onClose, onAdded }: { roomId: st
 
 // ───────────────────────────── Composer: hold to talk / type ─────────────────────────────
 
-function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; onSent: () => void; disabled: boolean }) {
+function Composer({ creds, me, ribbon, disabled }: { creds: Creds; me: Member | null; ribbon: string; onSent: () => void; disabled: boolean }) {
   const rec = useRef<Recorder | null>(null);
   const [recording, setRecording] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -442,6 +658,13 @@ function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; on
   const [text, setText] = useState("");
   const [status, setStatus] = useState<string>("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recFor, setRecFor] = useState(0); // seconds held, shown on the tally
+  useEffect(() => {
+    if (!recording) return setRecFor(0);
+    const t0 = Date.now();
+    const iv = setInterval(() => setRecFor(Math.floor((Date.now() - t0) / 1000)), 250);
+    return () => clearInterval(iv);
+  }, [recording]);
 
   const send = async (t: string) => {
     const body = t.trim();
@@ -543,13 +766,17 @@ function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; on
                 setEditing(true);
               }}
             >
-              “{preview}” <span>tap to edit</span>
+              “{preview}” <span className="edge">Sending · tap to edit</span>
               <i className="countdown" />
             </button>
           )}
         </div>
       )}
-      {status && <div className="status">{status}</div>}
+      {status && (
+        <div className="status edge" role="status">
+          {status}
+        </div>
+      )}
       {typing ? (
         <form
           className="type-row"
@@ -583,9 +810,11 @@ function Composer({ creds, me, disabled }: { creds: Creds; me: Member | null; on
             onContextMenu={(e) => e.preventDefault()}
           >
             {recording ? "Release to send" : "Hold to talk"}
-            <span className="kbd-hint">or hold Space</span>
+            {recording ? <span className="kbd-hint edge">Rec 0:{String(recFor).padStart(2, "0")}</span> : <span className="kbd-hint">or hold Space</span>}
           </button>
-          <div className="me-chip">{me?.persona_url ? <img src={me.persona_url} alt="" /> : <span>{me?.name?.[0] ?? "?"}</span>}</div>
+          <div className="me-chip" style={{ ["--rib" as any]: ribbon }} title={me?.name}>
+            {me?.persona_url ? <img src={me.persona_url} alt="" /> : <span>{me?.name?.[0] ?? "?"}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -824,7 +1053,7 @@ function Settings({ roomId, creds, me, onClose, onChanged }: { roomId: string; c
               <h3>Receipt · this room</h3>
               {receipt ? (
                 <>
-                  <table className="rec">
+                  <table className="receipt">
                     <tbody>
                       <tr>
                         <th>model</th>

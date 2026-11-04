@@ -24,6 +24,7 @@ const paths: Record<string, string> = {
   close: "M6 6l12 12M18 6L6 18",
   play: "M8 5v14l11-7z",
   copy: "M9 9h11v11H9zM5 15V4h11",
+  chevron: "M6 15l6-6 6 6",
 };
 
 export function Icon({ name }: { name: keyof typeof paths }) {

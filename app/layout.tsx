@@ -1,8 +1,10 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 
 const sans = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans", display: "swap" });
+// the room's face: a grotesque with a width axis, condensed for the edge print along the film
+const film = Archivo({ subsets: ["latin"], axes: ["wdth"], variable: "--font-film", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Scene: your group chat, performed",
@@ -15,7 +17,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, maxi
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={sans.variable}>
+    <html lang="en" className={`${sans.variable} ${film.variable}`}>
       <body>{children}</body>
     </html>
   );
