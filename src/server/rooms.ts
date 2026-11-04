@@ -7,7 +7,7 @@ export const ROOM_DAILY_MESSAGES = 200;
 export async function getRoomState(roomId: string) {
   const [{ data: room }, { data: members }, { data: messages }, { data: renders }] = await Promise.all([
     db().from("rooms").select("*").eq("id", roomId).maybeSingle(),
-    db().from("members").select("id, room_id, name, persona_url, persona_away_url, figure, figure_status, enrolled_voice, preset, is_seed, created_at").eq("room_id", roomId).order("created_at"),
+    db().from("members").select("id, room_id, name, persona_url, persona_away_url, figure, figure_status, enrolled_voice, preset, is_seed, profile_id, created_at").eq("room_id", roomId).order("created_at"),
     db().from("messages").select("id, room_id, member_id, seq, text, created_at").eq("room_id", roomId).order("seq", { ascending: false }).limit(200),
     db().from("renders").select("*").eq("room_id", roomId),
   ]);

@@ -43,7 +43,7 @@ export function figurePrompt(spec: PersonaSpec): string {
  * Stop-motion replacement frames: small edits of a pose image (mouth shapes, a blink, the other half of a laugh),
  * swapped in at 12 fps by the stage, the way stop-motion films swap faces.
  */
-export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk"] as const;
+export const FIGURE_FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk", "q3_back", "back"] as const;
 export type FigureFrame = (typeof FIGURE_FRAMES)[number];
 const HOLD = "Same character, same clay style, same stool, same pose, same framing, same plain light gray background and lighting. Change nothing else:";
 const MOVE = "Same character, same clay style, same stool, same framing, same plain light gray background and lighting.";
@@ -58,6 +58,9 @@ export const FRAME_EDITS: Record<FigureFrame, { from: FigurePose | FigureFrame; 
   laughing_b: { from: "laughing", prompt: `${MOVE} Still laughing hard, but now leaning forward with one hand slapping the knee.` },
   q3: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 45 degrees so the figure faces toward the right side of the picture: a three-quarter view, still sitting with hands on the knees, looking where the body faces.` },
   side: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 90 degrees so the figure faces the right side of the picture: a full side profile view, still sitting with hands on the knees, looking straight ahead to the right.` },
+  // the turntable on the home screen: the two views from behind (mirrored for the other half of the turn)
+  q3_back: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 135 degrees, so we see the figure from behind at a three-quarter angle, facing away toward the back right of the picture: the back of the head and hair, one shoulder and the back of the outfit, the face hidden, still sitting with hands on the knees.` },
+  back: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 180 degrees, so we see the figure from directly behind: the back of the head and hair and the back of the outfit, no face visible, still sitting on the stool.` },
   // a figure turned toward someone keeps talking: the turned views get an open mouth too
   q3_talk: { from: "q3", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
   side_talk: { from: "side", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },

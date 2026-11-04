@@ -2,7 +2,7 @@
 
 # Scene: your group chat, performed
 
-A group chat with a new layout. You sit at a round table in a miniature stop-motion dining room with your friends as clay figures, seen from your own seat. When a message arrives, its sender says it in their own voice, the line in a bubble over their head, turning on their stool to whoever the line is for (you, a friend, or the whole table); everyone else turns to the speaker and reacts, and the camera frames the two people in the exchange. Your own lines appear at the bottom, where you said them. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
+A group chat with a new layout. You make yourself once (a name, your own voice, a clay figure), and your figure stands on a turntable on your home screen, with your chats and friends in a sheet beneath it. Open a chat and a pair of clay double doors swings open onto it: you sit at a round table in a miniature stop-motion dining room with your friends as clay figures, seen from your own seat. When a message arrives, its sender says it in their own voice, the line in a bubble over their head, turning on their stool to whoever the line is for (you, a friend, or the whole table); everyone else turns to the speaker and reacts, and the camera frames the two people in the exchange. Your own lines appear at the bottom, where you said them. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
 
 Theme: **Build for Your World** · Track: Indie Developer · Meta AI Developer Hackathon 2026
 
@@ -18,6 +18,8 @@ Turn the external voice off and Scene still works: the figures, the performance 
 | **Turning to whoever is talking.** The speaker turns on their stool to whoever the line is for, the others turn to the speaker, each on an S curve. Each figure has front, three-quarter and side views (mirrored for the other way), swapped like a stop-motion puppet's turnaround, and the turned views talk too. | **Muse Image** draws the turnaround views and a talking mouth for the turned ones; **SAM 3.1** cuts each one out. |
 | **The set.** A miniature dining room in the same clay look as the cast: walls, floor, tabletop, a birthday cake with lit candles, a teapot, a place laid at every seat. | **Muse Image** paints the four walls, the floor and the tabletop as clay set photographs and sculpts the props; **SAM 3.1** cuts the props out (`scripts/make-set.ts`, about $0.15 once). |
 | **Dress your figure; the face never changes.** Like an avatar builder: open Hair, Top or Extras and six options appear, drawn on your own figure. Or say it ("빨간 비니 씌워줘"). Whatever you pick, your face stays pixel for pixel. | **Muse Image** draws every option on your figure. **SAM 3.1** found your face once; code pastes it back onto each edit (glasses and hat brims, cut out by SAM 3.1, stay on top). Said changes: **Voice Transcribe** writes them down, **Muse Spark** turns them into one edit, `validateSaid` checks it. |
+| **Your home.** Your figure on a walnut plinth in your own room. Drag to walk round it (front, three-quarter, side, back: eight views, swapped like a stop-motion turnaround), pinch to come closer. It blinks. | **Muse Image** draws the turnaround views from behind (two more edits of the same figurine), **SAM 3.1** cuts them out. |
+| **The room you sit in.** Pick a dining room, a corner cafe or a rooftop at night, or say any room ("비 오는 밤 서울 포장마차") and everyone at the table sees it change. | **Muse Spark** turns the words into a set plan (place, walls, floor, tabletop) with no field for people or writing; `validateSetSpec` checks it (fixed checkpoint, 3 tries); **Muse Image** paints the six surfaces in parallel (about 30 s, $0.06). |
 | **Demo friends.** Alone in a room? Seat Sam, Mina or Jay. They answer what you post, in character, and their replies are performed like anyone's. | **Muse Spark** proposes up to two replies; `validateReplies` keeps only short lines from friends who are at the table. |
 | **The performance.** Who each line is said to (so the right people turn); who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. Live lines use a rule table: someone called by name, else whoever spoke before. |
 | **Talking.** Hold to talk; your words become the message. | **Muse Voice Transcribe**. |
@@ -25,6 +27,18 @@ Turn the external voice off and Scene still works: the figures, the performance 
 | **Consent.** Only your own voice can be registered. | **Muse Voice Transcribe** checks that you read the three sentences shown. |
 
 External pieces, each replaceable: **Qwen3-TTS** (Apache 2.0, self-hosted) speaks the lines, because Meta has no text-to-speech; **fal.ai** hosts Meta's SAM 3D Objects; **Supabase** stores rooms and syncs them.
+
+## Use it like a chat app (no login)
+
+Open the web app at `/home`:
+
+1. **Name, voice, figure.** Type a name; read three sentences so Voice Transcribe can register your voice (or skip and keep a preset); pick hair, top and mood and Muse Image sculpts you.
+2. **Home.** Your figure on the turntable; the sheet below has **Chats** and **Friends**; the top-right button customizes your figure, voice and home room.
+3. **The demo chat is a script.** Everyone gets a copy of "wrong chat" (Sam, Mina and Jay, twelve pre-written messages) so the table has something to perform on day one. It is marked **Script** in the list and in the room.
+4. **Real chats are real.** Friends tab → share your code (`SCN-XXXX`) or link → your friend asks, you accept → a 1:1 chat opens for both of you. **New chat** starts a group with any of your friends; inside a room, the add-friend button seats more. Messages sync live. To try it alone, open `/home` in a second browser (or a private window) and be your own friend.
+5. **Rooms.** Tap a chat: the doors open onto its table. The house button dresses the room (name and set) for everyone in it.
+
+Accounts do not exist: your key lives in your browser. Demo friends played by Spark (Sam, Mina, Jay) can be seated in any room from the add-friend sheet.
 
 ## Try it in 60 seconds (no login)
 
@@ -77,6 +91,7 @@ Replay (missed messages)
 |---|---|---|
 | The director cannot change a word | `src/core/director.ts` | The JSON schema has no text field and member ids are an enum of the room. `validate_directions` rejects extra keys anywhere (D4), missing, duplicate or reordered lines (D1), values out of range (D2), oversized segments (D3), and reactions from unknown members or from the speaker (D5). Three failures fall back to the rule table. |
 | Every spoken line is read back | `src/core/voice.ts` | Synthesized audio → Voice Transcribe → score = 1 − character error rate against the message (numbers may be spoken as words) ≥ 0.85, else synthesize again (≤ 3), else captions only, flagged. |
+| A said room has no people and no writing | `src/core/sets.ts` | Spark's set plan has eight fixed string fields and nothing else. `validateSetSpec` rejects extra keys or missing fields (S1), overlong fields (S2), people, faces or writing (S3) and non-English text (S4) before Muse Image draws anything; the errors go back to Spark, three tries. |
 | Only your own voice | `src/core/voice.ts` | The recording must read the three sentences shown (≥ 0.80), 6–20 s, under 40% silence. Nothing is stored before it passes. |
 
 ## Numbers
@@ -109,22 +124,24 @@ You can only register **your own** voice, and enrollment requires reading three 
 # needs a Supabase project: apply supabase/migrations/*.sql, then fill the SUPABASE_* keys in .env
 npx tsx scripts/seed-demo.ts            # seeds the demo template room (voices if TTS_URL is set)
 npx tsx scripts/update-demo-figures.ts  # attaches the seed cast and lets Spark direct the room
-npm run dev                             # http://localhost:3000 → "Open the demo room" (a private copy per visitor)
+npm run dev                             # http://localhost:3000/home → name, voice, figure → your chats (the demo chat is a private copy per person)
 ```
 
-Rooms are links. No accounts: joining creates a member with a private key kept in the browser. Presence is posture: friends who are in the room sit up; friends who are away sleep slumped over the table, and wake only for the lines that concern them.
+Profiles, not accounts: your name, figure and voice are made once and kept with a private key in your browser; every room you sit in carries them (`members.profile_id`). Friends are a request and an answer (`friendships`); accepting opens a room for the two of you. Rooms are also links: opening one without a profile asks you to make yourself first, then seats you. Presence is posture: friends who are in the room sit up; friends who are away sleep slumped over the table, and wake only for the lines that concern them.
 
 ## Repository map
 
 ```
 src/core/      meta.ts (Meta Model API) · figure.ts (figure pipeline) · sam3d.ts (SAM 3D Objects) · director.ts + rules.ts
-               (Spark director, validator, rule table) · voice.ts (checks) · tts.ts · wav.ts · numbers.ts · ledger.ts (receipt)
-src/stage3d/   engine.ts (three.js table stage) · replay-entry.ts (self-contained replay.html)
-src/server/    Supabase access, rendering, figures, quotas, demo-room fork
-src/client/    RoomApp.tsx (join, figure, voice, room, hold to talk, replay, settings) · HeroStage.tsx
+               (Spark director, validator, rule table) · voice.ts (checks) · sets.ts (room sets: Spark plan, validateSetSpec,
+               Muse Image painting) · tts.ts · wav.ts · numbers.ts · ledger.ts (receipt)
+src/stage3d/   engine.ts (three.js table stage) · home.ts (the turntable) · set.ts (room sets) · replay-entry.ts (replay.html)
+src/server/    Supabase access · profiles.ts (profiles, seats, chat list, friends) · rendering, figures, quotas, demo-room fork
+src/client/    HomeApp.tsx (first run, home turntable, chats, friends, customize) · RoomApp.tsx (room, hold to talk, replay,
+               room sheet) · Doors.tsx · RoomSet.tsx
 app/           Next.js pages and API routes
 tts/           Qwen3-TTS service (Modal + local) with one HTTP contract
-scripts/       demo.ts · make-seed-figures.ts · seed-demo.ts · update-demo-figures.ts · export-room.ts
+scripts/       demo.ts · make-seed-figures.ts · make-set.ts · make-themes.ts · seed-demo.ts · update-demo-figures.ts · export-room.ts
 test/          unit tests (no network)
 ```
 

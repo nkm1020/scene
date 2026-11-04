@@ -2,7 +2,7 @@ import { Ledger } from "@/core/ledger";
 import { maskFigure } from "@/core/figure";
 import { LOOKBOOK } from "@/core/lookbook";
 import { authMember, db, saveLedger, jsonError, HttpError } from "@/server/db";
-import { loadLook, saveLook, storePose } from "@/server/figures";
+import { loadLook, saveLook, storePose, updateFigure } from "@/server/figures";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     await saveLook(member.room_id, member.id, "current.png", png);
     const m = await maskFigure(png, { ledger, op: "look.mask" });
     // the old expressions belong to the old look: start the figure over from this neutral
-    await db().from("members").update({ figure: null, figure_status: "dressing" }).eq("id", member.id);
+    await updateFigure(member.id, { figure: null, figure_status: "dressing" });
     const neutral = await storePose(member.id, member.room_id, Date.now(), { pose: "neutral", image: png, cutout: m.cutout, mask: m.mask, glb: null, coverage: m.coverage });
     return Response.json({ neutral });
   } catch (e) {

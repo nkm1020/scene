@@ -10,8 +10,12 @@ import { ENROLL_SENTENCES } from "@/core/seed";
 import { castHere } from "@/core/cast";
 import { Icon, Mark } from "./ui";
 import FigureStudio from "./FigureStudio";
+import Doors from "./Doors";
+import RoomSetPicker from "./RoomSet";
+import { loadProfile, type Profile } from "./profile";
+import { applyRoomSet, roomSetKey } from "@/stage3d/set";
 
-type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; figure?: FigureAssets | null; figure_status?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean };
+type Member = { id: string; room_id: string; name: string; persona_url: string | null; persona_away_url?: string | null; figure?: FigureAssets | null; figure_status?: string | null; enrolled_voice: boolean; preset: string; is_seed: boolean; profile_id?: string | null };
 type Message = { id: string; room_id: string; member_id: string; seq: number; text: string; created_at: string };
 type Render = {
   message_id: string;
@@ -30,7 +34,7 @@ type Render = {
   reactions?: { member_id: string; pose: any; look: any }[] | null;
   addressee?: string | null;
 };
-type RoomState = { room: { id: string; name: string; is_demo: boolean }; members: Member[]; messages: Message[]; renders: Render[] };
+type RoomState = { room: { id: string; name: string; is_demo: boolean; kind?: string; set?: any }; members: Member[]; messages: Message[]; renders: Render[] };
 
 
 /** Who a line is said to: the director's choice when stored, else the rule table (someone it names, or whoever spoke before). */
@@ -79,8 +83,12 @@ function runTime(ms: number) {
 }
 const frameNo = (seq: number) => String(seq).padStart(3, "0"); // the same number toItem prints on stage
 
-export default function RoomApp({ roomId }: { roomId: string }) {
+export default function RoomApp({ roomId, door = false }: { roomId: string; door?: boolean }) {
   const [state, setState] = useState<RoomState | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [doors, setDoors] = useState<"closed" | "opening" | null>(door ? "closed" : null);
+  const [roomSheet, setRoomSheet] = useState(false);
+  const [scriptNote, setScriptNote] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creds, setCreds] = useState<Creds | null>(null);
   const [joined, setJoined] = useState(false);
@@ -118,23 +126,64 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   }, [roomId]);
 
   useEffect(() => {
-    const c = loadCreds(roomId);
-    setCreds(c);
-    setJoined(!!c);
+    const p = loadProfile();
+    setProfile(p);
     setSeen(lastSeen(roomId));
-    reload().catch((e) => setError(e.message));
-  }, [roomId, reload]);
+    if (door) history.replaceState(null, "", location.pathname);
+    const c = loadCreds(roomId);
+    if (c) {
+      setCreds(c);
+      setJoined(true);
+      reload().catch((e) => setError(e.message));
+      return;
+    }
+    // no seat here yet: with a profile you sit down as yourself; without one, make your figure first
+    if (!p) {
+      location.replace(`/home?next=${encodeURIComponent(`/r/${roomId}`)}`);
+      return;
+    }
+    api<{ member: Member; secret: string }>(`/api/rooms/${roomId}/join`, { method: "POST", json: p })
+      .then((r) => {
+        const seat = { memberId: r.member.id, secret: p.secret };
+        saveCreds(roomId, seat);
+        setCreds(seat);
+        setJoined(true);
+        return reload();
+      })
+      .catch((e) => setError(e.message));
+  }, [roomId, reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stage
   const stageMembers: StageMember[] = useMemo(
     () => (state?.members ?? []).map((m) => ({ id: m.id, name: m.name, personaUrl: m.persona_url, awayUrl: m.persona_away_url ?? null, figure: m.figure ?? null, present: present.has(m.id) })),
     [state?.members, present],
   );
+  const setKey = roomSetKey(state?.room.set);
+  const builtSet = useRef<string | null>(null);
   useEffect(() => {
     if (!joined || !stageHost.current || !state) return;
-    if (!stage.current) stage.current = createStage(stageHost.current, { members: stageMembers, viewerId: creds?.memberId ?? null });
-    else stage.current.setMembers(stageMembers);
-  }, [joined, stageMembers, state, creds?.memberId]);
+    if (!stage.current) {
+      applyRoomSet(state.room.set);
+      builtSet.current = setKey;
+      stage.current = createStage(stageHost.current, { members: stageMembers, viewerId: creds?.memberId ?? null });
+    } else stage.current.setMembers(stageMembers);
+  }, [joined, stageMembers, state, creds?.memberId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the room got a new set: build the stage again around the same table
+  useEffect(() => {
+    if (!stage.current || !stageHost.current || !stateRef.current || builtSet.current === setKey) return;
+    builtSet.current = setKey;
+    stage.current.destroy();
+    applyRoomSet(stateRef.current.room.set);
+    stage.current = createStage(stageHost.current, { members: stageMembers, viewerId: creds?.memberId ?? null });
+  }, [setKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the doors open once the table is there to see
+  useEffect(() => {
+    if (doors !== "closed") return;
+    if (error) return setDoors(null);
+    if (!joined || !state) return;
+    const t = setTimeout(() => setDoors("opening"), 450);
+    return () => clearTimeout(t);
+  }, [doors, joined, state, error]);
   useEffect(
     () => () => {
       stage.current?.destroy();
@@ -203,6 +252,9 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `room_id=eq.${roomId}` }, () => {
         void reload();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, () => {
+        void reload(); // renamed or a new set
       })
       .on("presence", { event: "sync" }, () => {
         const ids = new Set(Object.keys(ch.presenceState()));
@@ -306,32 +358,29 @@ export default function RoomApp({ roomId }: { roomId: string }) {
   }, [joined]);
 
   if (error) return <div className="center-msg">Couldn&apos;t open this room: {error}</div>;
-  if (!state) return <div className="center-msg">Opening the room…</div>;
-  if (!joined || !creds)
-    return (
-      <Join
-        roomId={roomId}
-        roomName={state.room.name}
-        onDone={(c) => {
-          saveCreds(roomId, c);
-          setCreds(c);
-          setJoined(true);
-          void reload();
-        }}
-      />
-    );
+  if (!state || !joined || !creds) return <div className="room">{doors && <Doors phase="closed" />}</div>;
 
   const playingSeq = playing ? state.messages.find((m) => m.id === playing)?.seq ?? null : null;
   const ribbonCss = state.members.map((m) => `.room .s3-name[data-m="${m.id}"]{--rib:${ribbonOf(state.members, m.id)}}`).join("");
+  const scripted = state.room.kind === "demo" || state.room.is_demo;
+  const others = state.members.filter((m) => m.id !== creds.memberId);
+  const title = state.room.kind === "dm" ? others.find((m) => !m.is_seed)?.name ?? state.room.name : state.room.name;
   return (
     <div className="room">
       <style>{ribbonCss}</style>
       <header className="room-top">
         <div className="room-id">
-          <Mark label={false} />
+          {profile ? (
+            <a className="icon-btn back" href="/home" aria-label="Back to your chats" title="Chats">
+              <Icon name="back" />
+            </a>
+          ) : (
+            <Mark label={false} />
+          )}
           <div>
-            <div className="room-name">{state.room.name}</div>
+            <div className="room-name">{title}</div>
             <div className="room-sub edge">
+              {scripted && <span className="script">Script · </span>}
               {state.members.length} at the table · {present.size} here
             </div>
           </div>
@@ -340,11 +389,23 @@ export default function RoomApp({ roomId }: { roomId: string }) {
           <button className="icon-btn" onClick={() => setFriends(true)} aria-label="Add a friend" title="Add a friend">
             <Icon name="addFriend" />
           </button>
+          <button className="icon-btn" onClick={() => setRoomSheet(true)} aria-label="Dress this room" title="The room">
+            <Icon name="room" />
+          </button>
           <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Your figure, voice and receipt" title="Your figure, voice and receipt">
             <Icon name="sliders" />
           </button>
         </div>
       </header>
+      {scripted && scriptNote && (
+        <div className="script-note" role="note">
+          <span className="edge">Demo script</span>
+          <span>Pre-written lines, so you can watch the table perform. For real chats, add friends from home.</span>
+          <button className="icon-btn" onClick={() => setScriptNote(false)} aria-label="Hide this note">
+            <Icon name="close" />
+          </button>
+        </div>
+      )}
       <div className="stage-host" ref={stageHost}>
         {mode === "idle" && !playing && missed.length > 0 && (
           <button className="missed-pill" onClick={playMissed}>
@@ -405,8 +466,19 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         onReplay={(m) => void replayOne(m)}
       />
       <Composer creds={creds} me={me} ribbon={ribbonOf(state.members, creds.memberId)} onSent={() => void 0} disabled={mode !== "idle"} />
-      {friends && <FriendsSheet roomId={roomId} creds={creds} members={state.members} onClose={() => setFriends(false)} onAdded={() => void reload()} />}
-      {settings && <Settings roomId={roomId} creds={creds} me={me} onClose={() => setSettings(false)} onChanged={() => void reload()} />}
+      {friends && <FriendsSheet roomId={roomId} creds={creds} profile={profile} members={state.members} onClose={() => setFriends(false)} onAdded={() => void reload()} />}
+      {settings && <Settings roomId={roomId} creds={profile ? { memberId: profile.profileId, secret: profile.secret } : creds} me={me} onClose={() => setSettings(false)} onChanged={() => void reload()} />}
+      {roomSheet && (
+        <RoomSheet
+          roomId={roomId}
+          creds={creds}
+          name={state.room.name}
+          set={state.room.set}
+          onClose={() => setRoomSheet(false)}
+          onChanged={() => void reload()}
+        />
+      )}
+      {doors && <Doors phase={doors} onDone={() => setDoors(null)} />}
     </div>
   );
 }
@@ -582,8 +654,24 @@ function FilmStrip({
 type DemoFriend = { id: string; name: string; persona: string };
 const SEED_FACE: Record<string, string> = { sam: "/seed/figures/sam/neutral.webp", mina: "/seed/figures/mina/neutral.webp", jay: "/seed/figures/jay/neutral.webp" };
 
-function FriendsSheet({ roomId, creds, members, onClose, onAdded }: { roomId: string; creds: Creds; members: Member[]; onClose: () => void; onAdded: () => void }) {
+function FriendsSheet({ roomId, creds, profile, members, onClose, onAdded }: { roomId: string; creds: Creds; profile: Profile | null; members: Member[]; onClose: () => void; onAdded: () => void }) {
   const [list, setList] = useState<DemoFriend[]>([]);
+  const [mine, setMine] = useState<{ id: string; person: { id: string; name: string; face: string | null } | null }[]>([]);
+  useEffect(() => {
+    if (profile) api("/api/home", { method: "POST", json: { ...profile, seen: {} } }).then((r) => setMine(r.friends), () => void 0);
+  }, [profile]);
+  const seatFriend = async (friendId: string) => {
+    setBusy(friendId);
+    setErr("");
+    try {
+      await api("/api/friends", { method: "POST", json: { ...profile, action: "seat", roomId, friendId } });
+      onAdded();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
@@ -602,7 +690,7 @@ function FriendsSheet({ roomId, creds, members, onClose, onAdded }: { roomId: st
       setBusy(null);
     }
   };
-  const link = typeof location === "undefined" ? "" : location.href;
+  const link = typeof location === "undefined" ? "" : `${location.origin}/r/${roomId}`;
   return (
     <div className="sheet-wrap" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add a friend">
@@ -612,6 +700,34 @@ function FriendsSheet({ roomId, creds, members, onClose, onAdded }: { roomId: st
             <Icon name="close" />
           </button>
         </div>
+        {profile && (
+          <section>
+            <h3>Your friends</h3>
+            {mine.length === 0 ? (
+              <p className="sub">No friends yet. Add them by code on the home screen (Friends).</p>
+            ) : (
+              <div className="friend-list">
+                {mine.map((f) =>
+                  f.person ? (
+                    <div className="friend-row" key={f.id}>
+                      <div className="face">{f.person.face && <img src={f.person.face} alt="" />}</div>
+                      <div className="who">
+                        <b>{f.person.name}</b>
+                      </div>
+                      {members.some((m) => m.profile_id === f.person!.id) ? (
+                        <span className="here">At the table</span>
+                      ) : (
+                        <button className="ghost small" disabled={!!busy} onClick={() => void seatFriend(f.person!.id)}>
+                          {busy === f.person.id ? "Seating…" : "Seat"}
+                        </button>
+                      )}
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            )}
+          </section>
+        )}
         <section>
           <h3>Invite someone</h3>
           <p className="sub">They open the link, make their figure, and sit down at your table.</p>
@@ -833,70 +949,7 @@ function Composer({ creds, me, ribbon, disabled }: { creds: Creds; me: Member | 
   );
 }
 
-// ───────────────────────────── Join: name → persona → voice ─────────────────────────────
-
-function Join({ roomId, roomName, onDone }: { roomId: string; roomName: string; onDone: (c: Creds) => void }) {
-  const [step, setStep] = useState<"name" | "persona" | "voice">("name");
-  const [name, setName] = useState("");
-  const [preset, setPreset] = useState("female_a");
-  const [creds, setCreds] = useState<Creds | null>(null);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const join = async () => {
-    setBusy(true);
-    setErr("");
-    try {
-      const r = await api<{ member: Member; secret: string }>(`/api/rooms/${roomId}/join`, { method: "POST", json: { name, preset } });
-      const c = { memberId: r.member.id, secret: r.secret };
-      saveCreds(roomId, c);
-      setCreds(c);
-      setStep("persona");
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="join">
-      <div className="join-card">
-        <div className="room-tag">Scene · {roomName}</div>
-        {step === "name" && (
-          <>
-            <h1>Take a seat.</h1>
-            <p className="muted">Your friends will see you as a clay figure at their table, saying your messages in your voice.</p>
-            <label>Your name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="e.g. Sam" autoFocus />
-            <label>Voice until you register yours</label>
-            <div className="chips">
-              {[
-                ["female_a", "Preset A"],
-                ["female_b", "Preset B"],
-                ["male", "Preset C"],
-                ["male_b", "Preset D"],
-              ].map(([k, l]) => (
-                <button key={k} className={`chip ${preset === k ? "on" : ""}`} onClick={() => setPreset(k)}>
-                  {l}
-                </button>
-              ))}
-            </div>
-            {err && <p className="err">{err}</p>}
-            <button className="primary" disabled={!name.trim() || busy} onClick={join}>
-              {busy ? "…" : "Continue"}
-            </button>
-            <p className="fine">No account, no email. A private key for this room stays in this browser.</p>
-          </>
-        )}
-        {step === "persona" && creds && <FigureStudio creds={creds} onDone={() => setStep("voice")} />}
-        {step === "voice" && creds && <VoiceStep creds={creds} onNext={() => onDone(creds)} />}
-      </div>
-    </div>
-  );
-}
-
-function VoiceStep({ creds, onNext, compact }: { creds: Creds; onNext: () => void; compact?: boolean }) {
+export function VoiceStep({ creds, onNext, compact, doneLabel = "Enter the room" }: { creds: Creds; onNext: () => void; compact?: boolean; doneLabel?: string }) {
   const [lang, setLang] = useState<"en" | "ko">("en");
   const rec = useRef<Recorder | null>(null);
   const [recording, setRecording] = useState(false);
@@ -973,7 +1026,7 @@ function VoiceStep({ creds, onNext, compact }: { creds: Creds; onNext: () => voi
         )}
         {res?.ok ? (
           <button className="primary" onClick={onNext}>
-            {compact ? "Done" : "Enter the room"}
+            {compact ? "Done" : doneLabel}
           </button>
         ) : recording ? (
           <button className="primary rec" onClick={stop}>
@@ -1104,6 +1157,47 @@ function Settings({ roomId, creds, me, onClose, onChanged }: { roomId: string; c
             </section>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────── The room: its name and its set ─────────────────────────────
+
+function RoomSheet({ roomId, creds, name, set, onClose, onChanged }: { roomId: string; creds: Creds; name: string; set: any; onClose: () => void; onChanged: () => void }) {
+  const [n, setN] = useState(name);
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="sheet-wrap" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="The room">
+        <div className="sheet-head">
+          The room
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <Icon name="close" />
+          </button>
+        </div>
+        <section>
+          <h3>Name</h3>
+          <form
+            className="invite-row plain"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await api(`/api/rooms/${roomId}/set`, { method: "POST", json: { ...creds, name: n } });
+              setSaved(true);
+              onChanged();
+            }}
+          >
+            <input value={n} onChange={(e) => (setN(e.target.value), setSaved(false))} maxLength={40} />
+            <button className="ghost" type="submit" disabled={!n.trim() || n === name}>
+              {saved ? "Saved" : "Rename"}
+            </button>
+          </form>
+        </section>
+        <section>
+          <h3>The set</h3>
+          <p className="sub">Everyone at the table sees the room change.</p>
+          <RoomSetPicker roomId={roomId} creds={creds} current={set} onChanged={onChanged} />
+        </section>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import RoomApp from "@/client/RoomApp";
 
-export default async function Room({ params }: { params: Promise<{ id: string }> }) {
+export default async function Room({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ door?: string }> }) {
   const { id } = await params;
-  return <RoomApp roomId={id} />;
+  const { door } = await searchParams;
+  return <RoomApp roomId={id} door={door === "1"} />;
 }

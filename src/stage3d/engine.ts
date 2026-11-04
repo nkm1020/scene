@@ -295,7 +295,7 @@ function loadGlb(url: string, height = FIG_H): Promise<THREE.Object3D> {
 }
 
 /** A cut-out image and the rows its subject spans (all poses of a figure are cut at one scale). */
-interface Cut {
+export interface Cut {
   tex: THREE.Texture;
   w: number;
   h: number;
@@ -349,7 +349,7 @@ function inflate(inside: Uint8Array, gw: number, gh: number): Float32Array {
 }
 const cutCache = new Map<string, Promise<Cut>>();
 
-function loadCut(url: string): Promise<Cut> {
+export function loadCut(url: string): Promise<Cut> {
   if (!cutCache.has(url)) {
     cutCache.set(
       url,
@@ -406,7 +406,7 @@ function reliefOf(img: CanvasImageSource, w: number, h: number): Cut["relief"] {
 }
 
 /** Stand a cut-out up as a card, `k` world units per image pixel, the subject's feet on y=0. */
-function makeCard(cut: Cut, k: number, depth = RELIEF_DEPTH): THREE.Object3D {
+export function makeCard(cut: Cut, k: number, depth = RELIEF_DEPTH): THREE.Object3D {
   const w = cut.w * k, h = cut.h * k;
   const r = cut.relief;
   const geo = r ? new THREE.PlaneGeometry(w, h, r.gw - 1, r.gh - 1) : new THREE.PlaneGeometry(w, h);

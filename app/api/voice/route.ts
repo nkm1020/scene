@@ -3,6 +3,7 @@ import { verifyEnrollment } from "@/core/voice";
 import { ENROLL_SENTENCES } from "@/core/seed";
 import { authMember, db, saveLedger, jsonError, HttpError } from "@/server/db";
 import { assertDailySpend, assertRoomOp } from "@/server/quota";
+import { syncVoice } from "@/server/profiles";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
       if (error) throw error;
       await db().from("member_secrets").update({ voice_path: path, voice_text: sentences.join(" ") }).eq("member_id", member.id).throwOnError();
       await db().from("members").update({ enrolled_voice: true }).eq("id", member.id).throwOnError();
+      if (member.friend_code) await syncVoice(member.id); // a profile: every seat now speaks in this voice
     }
     return Response.json({ ok: check.ok, similarity: check.similarity, heard: check.heard, durationMs: check.durationMs, silence: check.silence, reasons: check.reasons, usd: ledger.summary().usd });
   } catch (e) {

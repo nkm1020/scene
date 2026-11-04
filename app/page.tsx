@@ -43,19 +43,8 @@ export default function Home() {
   const go = async (demo: boolean) => {
     setBusy(demo ? "demo" : "new");
     setErr("");
-    try {
-      const res = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(demo ? { demo: true } : { name: "Our room" }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error);
-      location.href = `/r/${j.roomId}`;
-    } catch (e: any) {
-      setErr(e.message);
-      setBusy(null);
-    }
+    // the app: name, voice and figure first, then your home with the demo chat (a script) and your real chats
+    location.href = "/home";
   };
 
   // the table follows the reading: each section starts the chat at the line it talks about
@@ -121,7 +110,7 @@ export default function Home() {
                 onClick={() => go(true)}
                 disabled={!!busy}
               >
-                {busy === "demo" ? "Opening the room…" : "Open the demo room"}
+                {busy === "demo" ? "Opening Scene…" : "Open Scene"}
               </button>
               <button
                 className="land-link"
@@ -430,7 +419,7 @@ npm run demo -- --voice none`}</code>
               onClick={() => go(true)}
               disabled={!!busy}
             >
-              {busy === "demo" ? "Opening the room…" : "Open the demo room"}
+              {busy === "demo" ? "Opening Scene…" : "Open Scene"}
             </button>
           </section>
         </main>
@@ -449,7 +438,7 @@ npm run demo -- --voice none`}</code>
         <div className="foot-menu">
           <Mark />
           <nav aria-label="Scene">
-            <button onClick={() => go(true)}>Demo room</button>
+            <button onClick={() => go(true)}>Open Scene</button>
             <button onClick={() => go(false)}>Start a room</button>
             <a href="#how">How it works</a>
             <a href="#run">Run it yourself</a>

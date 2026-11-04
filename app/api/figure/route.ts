@@ -3,7 +3,7 @@ import { createFigureBase } from "@/core/figure";
 import { phraseMask, maskPng } from "@/core/lookbook";
 import { authMember, db, saveLedger, jsonError, HttpError } from "@/server/db";
 import { assertDailySpend, assertRoomOp } from "@/server/quota";
-import { storePose, saveLook } from "@/server/figures";
+import { storePose, saveLook, updateFigure } from "@/server/figures";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     if (!spec.hair || !spec.outfit || !spec.vibe) throw new HttpError(400, "pick hair, outfit and vibe");
     const t0 = Date.now();
     const stamp = Date.now();
-    await db().from("members").update({ figure: null, figure_status: "drawing", persona_spec: spec }).eq("id", member.id);
+    await updateFigure(member.id, { figure: null, figure_status: "drawing", persona_spec: spec });
     const base = await createFigureBase(spec, { ledger });
     const neutral = await storePose(member.id, member.room_id, stamp, base);
     // the lookbook starts here: this face is the one every later change keeps (SAM 3.1 finds it once)
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       saveLook(member.room_id, member.id, "current.png", base.image),
       saveLook(member.room_id, member.id, "face.png", await maskPng(face.alpha, face.width, face.height)),
     ]);
-    await db().from("members").update({ figure_status: "dressing" }).eq("id", member.id);
+    await updateFigure(member.id, { figure_status: "dressing" });
     const s = ledger.summary();
     return Response.json({ neutral, ms: Date.now() - t0, usd: s.usd, threeD: !!base.glb, error3d: base.error ?? null });
   } catch (e) {

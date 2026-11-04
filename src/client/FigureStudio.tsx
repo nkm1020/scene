@@ -21,13 +21,15 @@ const TABS: { part: Part; label: string }[] = [
 ];
 type Tile = { id: string; label: string; tile?: string; error?: string };
 
-function FigurePreview({ figure, name }: { figure: FigureAssets; name: string }) {
+function FigurePreview({ img, name }: { img: string; name: string }) {
   const host = useRef<HTMLDivElement>(null);
+  // one stage per picture: rebuilding it on every render (each streamed option) runs the browser out of WebGL contexts
   useEffect(() => {
     if (!host.current) return;
+    const figure: FigureAssets = { neutral: { img, glb: null } };
     const st = createStage(host.current, { members: [{ id: "me", name, figure, present: true }], viewerId: null, quiet: true, showMark: false });
     return () => st.destroy();
-  }, [figure, name]);
+  }, [img, name]);
   return <div className="figure-preview" ref={host} />;
 }
 
@@ -163,7 +165,7 @@ export default function FigureStudio({ creds, neutral, onDone, compact }: { cred
   return (
     <div className="studio">
       {!compact && <h1>Dress your figure</h1>}
-      {figure && <FigurePreview figure={{ neutral: { img: figure, glb: null } }} name="You" />}
+      {figure && <FigurePreview img={figure} name="You" />}
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.part} role="tab" aria-selected={tab === t.part} className={tab === t.part ? "on" : ""} onClick={() => setTab(t.part)}>

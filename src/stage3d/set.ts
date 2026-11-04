@@ -13,6 +13,20 @@ export function setUrl(name: string): string {
   return (globalThis as any).__SCENE_SET__?.[name] ?? `${SET}/${name}.webp`;
 }
 
+export const SET_PARTS = ["wall-front", "wall-left", "wall-right", "wall-back", "floor", "tabletop"] as const;
+/** A room's own set, as rooms.set stores it: a ready-made theme, or surfaces Muse Image painted for it. */
+export type RoomSetRef = { theme?: string; urls?: Record<string, string> } | null | undefined;
+
+/** Point the set at a room's surfaces before the stage is built (no set, or the dining room: the default pictures). */
+export function applyRoomSet(set: RoomSetRef) {
+  const g = globalThis as any;
+  if (set?.urls) g.__SCENE_SET__ = { ...set.urls };
+  else if (set?.theme && set.theme !== "dining") g.__SCENE_SET__ = Object.fromEntries(SET_PARTS.map((p) => [p, `${SET}/${set.theme}/${p}.webp`]));
+  else delete g.__SCENE_SET__;
+}
+/** One string per set, so a stage can tell when its room changed sets. */
+export const roomSetKey = (set: RoomSetRef) => (set?.urls ? set.urls["wall-front"] ?? "said" : set?.theme ?? "dining");
+
 const loader = new THREE.TextureLoader();
 function tex(name: string) {
   const t = loader.load(setUrl(name));
