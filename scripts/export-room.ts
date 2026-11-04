@@ -29,8 +29,8 @@ const byId = new Map((renders ?? []).map((r: any) => [r.message_id, r]));
 // Images are inlined; 3D meshes stay as hosted URLs (if they cannot load, the stage stands the image up instead).
 const stageMembers = await Promise.all(
   (members ?? []).map(async (m: any) => {
-    const figure: Record<string, { img: string | null; glb: string | null; head: string | null }> = {};
-    for (const [pose, a] of Object.entries<any>(m.figure ?? {})) figure[pose] = { img: await fetchData(a?.img ?? null), glb: a?.glb ?? null, head: await fetchData(a?.head ?? null) };
+    const figure: Record<string, { img: string | null; glb: string | null }> = {};
+    for (const [pose, a] of Object.entries<any>(m.figure ?? {})) figure[pose] = { img: await fetchData(a?.img ?? null), glb: a?.glb ?? null };
     return { id: m.id, name: m.name, figure, personaUrl: Object.keys(figure).length ? null : await fetchData(m.persona_url), present: m.name !== "Jay" && !m.is_seed ? true : m.name !== "Jay" };
   }),
 );

@@ -17,7 +17,7 @@ const { data: members } = await db.from("members").select("id, name").eq("room_i
 const stamp = Date.now().toString(36); // new paths each run: public URLs are cached
 for (const m of members ?? []) {
   const id = m.name.toLowerCase();
-  const figure: Record<string, { img: string; glb: string | null; head?: string | null }> = {};
+  const figure: Record<string, { img: string; glb: string | null }> = {};
   for (const pose of [...FIGURE_POSES, ...FIGURE_FRAMES]) {
     const dir = `public/seed/figures/${id}`;
     if (!existsSync(`${dir}/${pose}.webp`)) continue;
@@ -28,12 +28,7 @@ for (const m of members ?? []) {
       await db.storage.from("figures").upload(`${base}.glb`, readFileSync(`${dir}/${pose}.glb`), { contentType: "model/gltf-binary", upsert: true });
       glb = pub(`${base}.glb`);
     }
-    let head: string | null = null;
-    if (existsSync(`${dir}/${pose}.head.webp`)) {
-      await db.storage.from("figures").upload(`${base}.head.webp`, readFileSync(`${dir}/${pose}.head.webp`), { contentType: "image/webp", upsert: true });
-      head = pub(`${base}.head.webp`);
-    }
-    figure[pose] = { img: pub(`${base}.webp`), glb, head };
+    figure[pose] = { img: pub(`${base}.webp`), glb };
   }
   await db.from("members").update({ figure, figure_status: "ready", persona_url: figure.neutral?.img ?? null, persona_away_url: figure.away?.img ?? null }).eq("id", m.id).throwOnError();
   console.log(m.name, Object.keys(figure).length, "poses,", Object.values(figure).filter((f) => f.glb).length, "meshes");

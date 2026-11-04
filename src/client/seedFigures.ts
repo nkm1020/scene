@@ -4,14 +4,9 @@ import type { FigureAssets } from "@/stage3d/engine";
 export const POSES = ["neutral", "happy", "laughing", "surprised", "angry", "sad", "away"] as const;
 /** Stop-motion replacement frames (mouths, blink, wake, the other half of each expression). */
 export const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk"] as const;
-/** Pictures without a separate head (asleep and waking up never turn their heads). */
-const NO_HEAD = new Set(["away", "wake"]);
 export function seedFigure(id: string, hasGlb: boolean): FigureAssets {
   return Object.fromEntries(
-    [...POSES, ...FRAMES].map((p) => [
-      p,
-      { img: `/seed/figures/${id}/${p}.webp`, glb: hasGlb ? `/seed/figures/${id}/${p}.glb` : null, head: NO_HEAD.has(p) ? null : `/seed/figures/${id}/${p}.head.webp` },
-    ]),
+    [...POSES, ...FRAMES].map((p) => [p, { img: `/seed/figures/${id}/${p}.webp`, glb: hasGlb ? `/seed/figures/${id}/${p}.glb` : null }]),
   );
 }
 export const SEED_STAGE_MEMBERS = (hasGlb: boolean) =>

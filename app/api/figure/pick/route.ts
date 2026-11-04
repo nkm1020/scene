@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const m = await maskFigure(png, { ledger, op: "look.mask" });
     // the old expressions belong to the old look: start the figure over from this neutral
     await db().from("members").update({ figure: null, figure_status: "dressing" }).eq("id", member.id);
-    const neutral = await storePose(member.id, member.room_id, Date.now(), { pose: "neutral", image: png, cutout: m.cutout, mask: m.mask, head: null, glb: null, coverage: m.coverage });
+    const neutral = await storePose(member.id, member.room_id, Date.now(), { pose: "neutral", image: png, cutout: m.cutout, mask: m.mask, glb: null, coverage: m.coverage });
     return Response.json({ neutral });
   } catch (e) {
     return jsonError(e);

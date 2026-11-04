@@ -1,9 +1,8 @@
 // Scene stage in 3D, first person, shot like a stop-motion film: you sit at a round table in a miniature dining room
 // with your friends as seated clay figurines (SAM 3D meshes). Everything moves twelve pictures a second; mouths,
 // blinks and laughs are replacement frames (Muse Image edits) swapped in like stop-motion faces; the clay boils.
-// Bodies stay turned to the table; heads turn, the way people at a table do: the speaker looks at whoever the line is
-// for, everyone else looks at the speaker (replacement heads: SAM 3.1 cuts each picture's head out, and the stage puts
-// one picture's head on another picture's body). Absent friends sleep slumped over.
+// People turn on their stools the way they do at a table: the speaker turns to whoever the line is for, everyone else
+// turns to the speaker. Absent friends sleep slumped over.
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -30,8 +29,7 @@ const wrapPi = (a: number) => {
 const REACTION_EMOJI: Partial<Record<Pose, string>> = { laughing: "😂", surprised: "😮", angry: "💢", sad: "😢", happy: "😊" };
 
 export interface FigureAssets {
-  /** img: the whole figure; head: the same picture's head alone (SAM 3.1), for replacement heads */
-  [pose: string]: { glb?: string | null; img?: string | null; head?: string | null } | undefined;
+  [pose: string]: { glb?: string | null; img?: string | null } | undefined;
 }
 
 export interface StageMember {
@@ -120,9 +118,7 @@ const ENV_FPS = 30;
 const FPS = 12; // stop motion: the puppets get a new picture twelve times a second (animated "on twos")
 const RENDER_FPS = 24; // the camera moves on ones, as a motion-control rig would shoot it
 const FRAMES = ["talk_a", "talk_b", "blink", "wake", "happy_b", "laughing_b", "surprised_b", "angry_b", "sad_b", "q3", "side", "q3_talk", "side_talk"];
-const HEAD_Z = 0.035; // a replacement head sits just proud of the body, so collars never cut into a chin
-const NECK = 1.75; // how far a head turns from where the body faces (about 100 degrees), radians
-/** Which turnaround picture shows a figure (or a head) at this angle away from the lens. */
+/** Which turnaround picture shows a figure at this angle away from the lens. */
 const viewOf = (rel: number) => (Math.abs(rel) < 0.42 ? "front" : Math.abs(rel) < 1.15 ? "q3" : "side");
 
 /**
@@ -199,18 +195,13 @@ interface Figure {
   poses: Map<string, THREE.Object3D>; // poses and replacement frames, one visible at a time
   cards: Set<THREE.Object3D>; // flat cut-outs: always turned to the viewer
   rig: THREE.Group; // holds the cut-outs, turned to face the lens
-  heads: Map<string, Layer>; // each picture's head alone
-  bodies: Map<string, Layer>; // each picture without its head
   current: Pose; // the pose the director asked for
   shown: string; // the picture on screen right now (a pose or one of its replacement frames)
   frameKey: string; // the picture chosen at the last exposure, before the view (front, three-quarter, side) is applied
   seat: THREE.Vector3;
   yaw: number;
-  targetYaw: number;
-  turn: SCurve; // the body turn in progress
-  headYaw: number; // where the head faces (world yaw)
-  headTurn: SCurve; // the head turn in progress
-  gaze: Figure | "camera" | null; // who this figure looks at (null: where the body faces, the table)
+  turn: SCurve; // the turn in progress
+  gaze: Figure | "camera" | null; // who this figure turns to (null: the table)
   speaking: boolean;
   mouth: number; // loudness of the line being said, 0..1
   flap: boolean;
@@ -229,13 +220,6 @@ interface Figure {
   react: HTMLDivElement; // a listener's reaction, above their head
   materials: { m: THREE.MeshStandardMaterial; base: THREE.Color }[];
   k: number | null; // world units per image pixel, from the neutral cut-out
-}
-
-/** Half of a picture (its head, or the rest), with where that picture's head sits on the card. */
-interface Layer {
-  card: THREE.Object3D;
-  ax: number; // card-local x of the head's middle
-  ay: number; // card-local y of the chin
 }
 
 /**
@@ -417,60 +401,6 @@ function reliefOf(img: CanvasImageSource, w: number, h: number): Cut["relief"] {
   const inside = new Uint8Array(gw * gh);
   for (let i = 0; i < inside.length; i++) inside[i] = a[i * 4 + 3] > 127 ? 1 : 0;
   return { hf: inflate(inside, gw, gh), gw, gh };
-}
-
-/** A picture in two halves for replacement heads, and where its head sits (middle and chin, in image pixels). */
-interface Split {
-  head: Cut;
-  body: Cut;
-  cx: number;
-  chin: number;
-}
-const splitCache = new Map<string, Promise<Split>>();
-
-/** The head is its own file (SAM 3.1 cut it out); the body is the whole picture with that head taken away. */
-function loadSplit(url: string, headUrl: string): Promise<Split> {
-  const key = `${url}|${headUrl}`;
-  if (!splitCache.has(key))
-    splitCache.set(
-      key,
-      Promise.all([loadCut(url), loadCut(headUrl)]).then(([whole, head]) => {
-        const img = whole.tex.image as HTMLImageElement, him = head.tex.image as HTMLImageElement;
-        const { w, h } = whole;
-        // the head's middle and its lowest row (the chin), read from its alpha on a quarter-size copy
-        const qw = Math.max(1, Math.round(w / 4)), qh = Math.max(1, Math.round(h / 4));
-        const c = document.createElement("canvas");
-        c.width = qw;
-        c.height = qh;
-        const g = c.getContext("2d", { willReadFrequently: true })!;
-        g.drawImage(him, 0, 0, qw, qh);
-        const d = g.getImageData(0, 0, qw, qh).data;
-        let sx = 0, n = 0, chin = 0;
-        for (let y = 0; y < qh; y++)
-          for (let x = 0; x < qw; x++)
-            if (d[(y * qw + x) * 4 + 3] > 127) {
-              sx += x;
-              n++;
-              chin = Math.max(chin, y);
-            }
-        const bc = document.createElement("canvas");
-        bc.width = w;
-        bc.height = h;
-        const bg = bc.getContext("2d")!;
-        bg.drawImage(img, 0, 0, w, h);
-        bg.globalCompositeOperation = "destination-out";
-        bg.drawImage(him, 0, 0, w, h);
-        const tex = new THREE.CanvasTexture(bc);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        return {
-          head: { ...head, w, h, top: whole.top, bottom: whole.bottom }, // laid out on the whole picture's rows
-          body: { tex, w, h, top: whole.top, bottom: whole.bottom, relief: reliefOf(bc, w, h) },
-          cx: n ? ((sx / n + 0.5) * w) / qw : w / 2,
-          chin: ((chin + 1) * h) / qh,
-        };
-      }),
-    );
-  return splitCache.get(key)!;
 }
 
 /** Stand a cut-out up as a card, `k` world units per image pixel, the subject's feet on y=0. */
@@ -802,17 +732,12 @@ export class Stage {
       poses: new Map(),
       cards: new Set(),
       rig,
-      heads: new Map(),
-      bodies: new Map(),
       current: member.present ? "neutral" : "away",
       shown: "",
       frameKey: "neutral",
       seat: seat.clone(),
       yaw: 0,
-      targetYaw: 0,
       turn: new SCurve(0),
-      headYaw: 0,
-      headTurn: new SCurve(0),
       gaze: null,
       speaking: false,
       mouth: 0,
@@ -833,10 +758,8 @@ export class Stage {
       materials: [],
       k: null,
     };
-    f.yaw = f.targetYaw = this.yawTo(seat, CENTER);
+    f.yaw = this.yawTo(seat, CENTER);
     f.turn = new SCurve(f.yaw);
-    f.headYaw = f.yaw;
-    f.headTurn = new SCurve(f.yaw);
     group.rotation.y = f.yaw;
     void this.loadPoses(f, i);
     return f;
@@ -897,41 +820,14 @@ export class Stage {
     f.shown = "";
   }
 
-  /** Load one picture's two halves (head, body) as cards, when the figure has the head cut out. */
-  private async loadLayers(f: Figure, key: string) {
-    const url = this.imgUrl(f, key), headUrl = f.member.figure?.[key]?.head;
-    if (!url || !headUrl || f.member.figure?.[key]?.glb) return;
-    const sp = await loadSplit(url, headUrl).catch(() => null);
-    if (!sp || this.disposed || this.figures.get(f.member.id) !== f) return;
-    const k = f.k ?? FIG_H / Math.max(1, sp.body.bottom - sp.body.top);
-    const ax = (sp.cx - sp.body.w / 2) * k, ay = (sp.body.bottom - sp.chin) * k;
-    for (const [map, cut] of [
-      [f.heads, sp.head],
-      [f.bodies, sp.body],
-    ] as const) {
-      const old = map.get(key);
-      if (old) this.dropObject(f, old.card);
-      const card = makeCard(cut, k);
-      card.visible = false;
-      f.rig.add(card);
-      map.set(key, { card, ax, ay });
-      this.keepMaterials(f, card);
-    }
-    f.shown = "";
-  }
-
   private async loadInto(f: Figure, key: string) {
     const o = await this.loadKey(f, key);
     if (o && !this.disposed && this.figures.get(f.member.id) === f) this.addKey(f, key, o);
-    await this.loadLayers(f, key);
   }
 
   private async reloadFigure(f: Figure) {
     for (const o of f.poses.values()) o.parent?.remove(o);
-    for (const l of [...f.heads.values(), ...f.bodies.values()]) l.card.parent?.remove(l.card);
     f.poses.clear();
-    f.heads.clear();
-    f.bodies.clear();
     f.cards.clear();
     f.materials = [];
     f.shown = "";
@@ -960,8 +856,6 @@ export class Stage {
       if (!f.poses.has("neutral")) this.addKey(f, "neutral", defaultFigure((Math.max(0, i) * 0.17) % 1));
       this.showFrame(f, f.current);
     }
-    // then the replacement heads: until they land, a head turn shows as the whole figure turning
-    await Promise.all(Object.keys(fig).filter((key) => fig[key]?.head).map((key) => this.loadLayers(f, key)));
   }
 
   private resolvePose(f: Figure, pose: Pose): Pose {
@@ -985,49 +879,34 @@ export class Stage {
     return this.resolvePose(f, base as Pose);
   }
 
-  /** Put a picture on screen at the next frame (the view and the head are worked out there). */
+  /** Put a picture on screen at the next frame (the view is worked out there). */
   private showFrame(f: Figure, name: string) {
     f.frameKey = name;
   }
 
   /**
-   * Dress the puppet for this frame. The body shows the turnaround view it has toward the lens (it faces the table);
-   * the head shows its own view (it faces whoever this figure looks at). When the two differ, one picture's body
-   * carries another picture's head, lined up at the chin, each mirrored to face its own way.
+   * Dress the puppet for this frame: the turnaround view it has toward the lens (a turned figure that is talking
+   * shows its talking view), mirrored when it faces the other way.
    */
-  private dress(f: Figure, still: boolean, relB: number, relH: number) {
+  private dress(f: Figure, still: boolean, rel: number) {
     const K = this.resolveKey(f, f.frameKey);
-    const vB = still ? "front" : viewOf(relB), vH = still ? "front" : viewOf(relH);
+    const view = still ? "front" : viewOf(rel);
     const open = f.speaking && (f.mouthFrame === "talk_a" || f.mouthFrame === "talk_b" || f.mouthFrame.endsWith("_b"));
-    const bodyKey = vB !== "front" && f.poses.has(vB) ? vB : K;
-    const headKey = vH === "front" ? K : open && f.poses.has(`${vH}_talk`) ? `${vH}_talk` : f.poses.has(vH) ? vH : K;
+    const key = view === "front" ? K : open && f.poses.has(`${view}_talk`) ? `${view}_talk` : f.poses.has(view) ? view : K;
     // a view faces the right of the picture; mirror it when this figure faces the other way
-    const mB = vB !== "front" && relB > 0, mH = vH !== "front" && relH > 0;
-    const body = f.bodies.get(bodyKey), head = f.heads.get(headKey);
-    const split = !!body && !!head && (bodyKey !== headKey || mB !== mH);
-    // without replacement heads yet, the whole figure shows the head's view
-    const wholeKey = split ? "" : f.heads.size ? bodyKey : headKey;
-    const mW = f.heads.size ? mB : mH;
-    const sig = split ? `s|${bodyKey}|${headKey}|${mB}|${mH}` : `w|${wholeKey}|${mW}`;
+    const mirror = view !== "front" && rel > 0;
+    const sig = `${key}|${mirror}`;
     if (sig === f.shown) return;
     f.shown = sig;
     for (const [p, o] of f.poses) {
-      o.visible = !split && p === wholeKey;
-      if (o.visible && o.userData.card) o.scale.x = mW ? -1 : 1;
-    }
-    for (const [p, l] of f.bodies) l.card.visible = split && p === bodyKey;
-    for (const [p, l] of f.heads) l.card.visible = split && p === headKey;
-    if (split) {
-      const sB = mB ? -1 : 1, sH = mH ? -1 : 1;
-      body!.card.scale.x = sB;
-      head!.card.scale.x = sH;
-      head!.card.position.set(sB * body!.ax - sH * head!.ax, body!.ay - head!.ay, HEAD_Z);
+      o.visible = p === key;
+      if (o.visible && o.userData.card) o.scale.x = mirror ? -1 : 1;
     }
   }
 
-  /** Where this figure's eyes want to go (world yaw): the one it looks at, or along its body to the table. */
+  /** Where this figure turns (world yaw): to the one it looks at, else to the table. */
   private gazeYaw(f: Figure): number {
-    if (f.dim > 0.5 || f.wake > 0 || !f.gaze) return f.yaw;
+    if (f.dim > 0.5 || f.wake > 0 || !f.gaze) return this.yawTo(f.seat, CENTER);
     return this.yawTo(f.group.position, f.gaze === "camera" ? this.camPos : f.gaze.group.position);
   }
 
@@ -1072,7 +951,6 @@ export class Stage {
     if (!o.member.present && o.current !== "away") this.stir(o);
     this.showPose(o, o.member.present ? "neutral" : "away");
     o.targetDim = o.member.present ? 0 : 1;
-    o.targetYaw = this.yawTo(o.seat, CENTER);
     o.gaze = null;
     o.gesture = "none";
   }
@@ -1122,11 +1000,10 @@ export class Stage {
       const asleep = f.dim > 0.5;
       if (exposure) this.animate(f, now, s, dt, rTable, rSeat);
       // cut-outs always face the lens; what turns is the picture: front, three-quarter or side (a stop-motion
-      // puppet's turnaround), for the body and the head each
-      const toLens = this.yawTo(f.group.position, this.camPos);
-      const relB = wrapPi(toLens - f.yaw), relH = wrapPi(toLens - f.headYaw);
-      f.rig.rotation.y = relB;
-      this.dress(f, asleep || f.wake > 0, relB, relH);
+      // puppet's turnaround)
+      const rel = wrapPi(this.yawTo(f.group.position, this.camPos) - f.yaw);
+      f.rig.rotation.y = rel;
+      this.dress(f, asleep || f.wake > 0, rel);
       // name card at the figure's own lap, so it can only ever sit on its own figure
       v.copy(f.group.position).multiplyScalar(1 - 0.06 / rSeat).setY(TABLE_Y + 0.02).project(this.camera);
       const onScreen = v.z < 1 && v.x > -1.1 && v.x < 1.1;
@@ -1156,16 +1033,11 @@ export class Stage {
   /** One exposure of a puppet: its turn, bounce, clay boil, breath, gesture, dimming and which picture it shows. */
   private animate(f: Figure, now: number, s: number, dt: number, rTable: number, rSeat: number) {
     {
-      // body turns on an S curve; a quarter turn takes about half a second
-      const dy = wrapPi(f.targetYaw - f.turn.p1);
+      // the figure turns on its stool on an S curve; a quarter turn takes about half a second
+      const dy = wrapPi(this.gazeYaw(f) - f.turn.p1);
       if (Math.abs(dy) > 1e-3) f.turn.to(f.turn.p1 + dy, now, (Math.min(0.9, 0.28 + 0.38 * Math.abs(dy)) * 1000) / (this.current?.speed ?? 1));
       f.yaw = f.turn.at(now)[0];
       f.group.rotation.y = f.yaw;
-      // the head turns on its own S curve, quicker than a body, never further than a neck allows
-      const goal = f.yaw + Math.max(-NECK, Math.min(NECK, wrapPi(this.gazeYaw(f) - f.yaw)));
-      const dh = wrapPi(goal - f.headTurn.p1);
-      if (Math.abs(dh) > 1e-3) f.headTurn.to(f.headTurn.p1 + dh, now, ((0.16 + 0.24 * Math.abs(dh)) * 1000) / (this.current?.speed ?? 1));
-      f.headYaw = f.headTurn.at(now)[0];
       // a small bounce when a line starts
       let hop = 0;
       if (f.hopT >= 0) {
@@ -1394,7 +1266,7 @@ export class Stage {
       f.speaking = true;
       f.breathe = false;
       f.targetDim = 0;
-      f.gaze = to === f ? null : to; // the body stays at the table; the head turns to whoever the line is for
+      f.gaze = to === f ? null : to; // turns to whoever the line is for
       this.showPose(f, item.emotion);
       f.hopT = 0;
       f.gesture = item.gesture;
@@ -1416,7 +1288,7 @@ export class Stage {
       }
       if (!r && !o.member.present) o.targetDim = 1;
       const look = r?.look ?? (awake ? "speaker" : "down");
-      // listeners turn their heads to the speaker (you, when you are the one talking)
+      // listeners turn to the speaker (you, when you are the one talking)
       o.gaze = look === "camera" || (look === "speaker" && !f) ? "camera" : look === "speaker" ? f : null;
       o.gesture = "none";
     }
@@ -1424,7 +1296,7 @@ export class Stage {
     this.showCaption(item);
 
     const dur = itemDuration(item) / speed;
-    // turn to the speaker: the line starts while the head is still turning, the way you turn to someone talking
+    // turn to the speaker: the line starts while everyone is still turning, the way you turn to someone talking
     const settling = this.move.t0 + this.move.dur * 0.5 - performance.now();
     await new Promise((r) => setTimeout(r, Math.min(700 / speed, Math.max(380 / speed, settling))));
     let audio: HTMLAudioElement | null = null;

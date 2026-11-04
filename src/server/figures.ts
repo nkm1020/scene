@@ -12,12 +12,7 @@ export async function storePose(memberId: string, roomId: string, stamp: number,
     await db().storage.from("figures").upload(`${base}.glb`, a.glb, { contentType: "model/gltf-binary", upsert: true });
     glb = publicUrl("figures", `${base}.glb`);
   }
-  let head: string | null = null;
-  if (a.head) {
-    await db().storage.from("figures").upload(`${base}.head.webp`, a.head, { contentType: "image/webp", upsert: true });
-    head = publicUrl("figures", `${base}.head.webp`);
-  }
-  const val = { img: publicUrl("figures", `${base}.webp`), glb, head };
+  const val = { img: publicUrl("figures", `${base}.webp`), glb };
   await db().rpc("merge_figure", { m: memberId, pose: name, val });
   if (name === "neutral") await db().from("members").update({ persona_url: val.img }).eq("id", memberId);
   if (name === "away") await db().from("members").update({ persona_away_url: val.img }).eq("id", memberId);
@@ -49,16 +44,7 @@ export async function makeExpressions(memberId: string, roomId: string, current:
   const { createFigurePoses, createFigureFrames } = await import("@/core/figure");
   await db().from("members").update({ figure_status: "posing" }).eq("id", memberId);
   try {
-    const { maskFigure } = await import("@/core/figure");
-    const { headLayer } = await import("@/core/heads");
-    // the neutral you picked gets its replacement head too (SAM 3.1), alongside the expressions
-    const neutral = (async () => {
-      const m = await maskFigure(current, { ledger });
-      const head = await headLayer(current, m.cutout, { ledger });
-      if (head) await storePose(memberId, roomId, stamp, { pose: "neutral", image: current, cutout: m.cutout, mask: m.mask, head, glb: null, coverage: m.coverage });
-    })().catch((e) => console.error("neutral head failed", e));
     const poses = await createFigurePoses(current, { ledger, onPose: async (a) => void (await storePose(memberId, roomId, stamp, a)) });
-    await neutral;
     await db().from("members").update({ figure_status: "ready" }).eq("id", memberId);
     const images: Record<string, Buffer> = { neutral: current };
     for (const p of poses) if (p.image.length) images[p.pose] = p.image;

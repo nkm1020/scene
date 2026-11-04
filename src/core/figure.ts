@@ -7,7 +7,6 @@ import sharp from "sharp";
 import { generateImage, editImage, segment } from "./meta";
 import { reconstruct3d } from "./sam3d";
 import { unionAlpha, applyAlpha, type PersonaSpec } from "./persona";
-import { headLayer, HEAD_SKIP } from "./heads";
 import type { Ledger } from "./ledger";
 
 export const FIGURE_POSES = ["neutral", "happy", "laughing", "surprised", "angry", "sad", "away"] as const;
@@ -59,7 +58,7 @@ export const FRAME_EDITS: Record<FigureFrame, { from: FigurePose | FigureFrame; 
   laughing_b: { from: "laughing", prompt: `${MOVE} Still laughing hard, but now leaning forward with one hand slapping the knee.` },
   q3: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 45 degrees so the figure faces toward the right side of the picture: a three-quarter view, still sitting with hands on the knees, looking where the body faces.` },
   side: { from: "neutral", prompt: `${VIEW} The character and the stool are turned 90 degrees so the figure faces the right side of the picture: a full side profile view, still sitting with hands on the knees, looking straight ahead to the right.` },
-  // a head turned toward someone keeps talking: the turned views get an open mouth too
+  // a figure turned toward someone keeps talking: the turned views get an open mouth too
   q3_talk: { from: "q3", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
   side_talk: { from: "side", prompt: `${HOLD} the mouth is open mid-word, as if talking.` },
   surprised_b: { from: "surprised", prompt: `${HOLD} the mouth is a smaller open oval, mid-word.` },
@@ -81,12 +80,12 @@ export async function createFigureFrames(
     const { from, prompt } = FRAME_EDITS[name];
     try {
       const edited = await editImage([images[from]!], prompt, { op: "figure.frame", ledger: opts.ledger });
-      const a = await liftPose(from in POSE_EDITS || from === "neutral" ? (from as FigurePose) : "neutral", edited.bytes, { ...opts, name });
+      const a = await liftPose(from in POSE_EDITS || from === "neutral" ? (from as FigurePose) : "neutral", edited.bytes, opts);
       images[name] = edited.bytes;
       await opts.onFrame?.(name, a);
       return [name, a] as const;
     } catch (e) {
-      const a: FigurePoseAsset = { pose: "neutral", image: Buffer.alloc(0), cutout: Buffer.alloc(0), mask: Buffer.alloc(0), head: null, glb: null, coverage: 0, error: (e as Error).message.slice(0, 200) };
+      const a: FigurePoseAsset = { pose: "neutral", image: Buffer.alloc(0), cutout: Buffer.alloc(0), mask: Buffer.alloc(0), glb: null, coverage: 0, error: (e as Error).message.slice(0, 200) };
       await opts.onFrame?.(name, a);
       return [name, a] as const;
     }
@@ -117,7 +116,6 @@ export interface FigurePoseAsset {
   image: Buffer; // opaque PNG from Muse Image
   cutout: Buffer; // transparent WebP (SAM 3.1 alpha)
   mask: Buffer; // full-frame PNG mask (white = figurine)
-  head: Buffer | null; // the head alone, a cut-out the size of `cutout` (SAM 3.1), for replacement heads
   glb: Buffer | null; // SAM 3D mesh
   coverage: number;
   error?: string;
@@ -141,9 +139,8 @@ export async function maskFigure(image: Buffer, opts: { ledger?: Ledger; op?: st
   throw new Error("SAM 3.1 found no figurine");
 }
 
-async function liftPose(pose: FigurePose, image: Buffer, opts: { ledger?: Ledger; skip3d?: boolean; name?: string }): Promise<FigurePoseAsset> {
+async function liftPose(pose: FigurePose, image: Buffer, opts: { ledger?: Ledger; skip3d?: boolean }): Promise<FigurePoseAsset> {
   const m = await maskFigure(image, { ledger: opts.ledger, op: `figure.mask` });
-  const head = HEAD_SKIP.has(opts.name ?? pose) ? null : await headLayer(image, m.cutout, { ledger: opts.ledger }).catch(() => null);
   let glb: Buffer | null = null;
   let error: string | undefined;
   if (!opts.skip3d) {
@@ -153,7 +150,7 @@ async function liftPose(pose: FigurePose, image: Buffer, opts: { ledger?: Ledger
       error = (e as Error).message.slice(0, 200);
     }
   }
-  return { pose, image, cutout: m.cutout, mask: m.mask, head, glb, coverage: m.coverage, error };
+  return { pose, image, cutout: m.cutout, mask: m.mask, glb, coverage: m.coverage, error };
 }
 
 /** Draw the neutral figurine and lift it to 3D (the part a new member waits for). */
@@ -182,7 +179,7 @@ export async function createFigurePoses(
         await opts.onPose?.(a);
         return a;
       } catch (e) {
-        const a: FigurePoseAsset = { pose, image: Buffer.alloc(0), cutout: Buffer.alloc(0), mask: Buffer.alloc(0), head: null, glb: null, coverage: 0, error: (e as Error).message.slice(0, 200) };
+        const a: FigurePoseAsset = { pose, image: Buffer.alloc(0), cutout: Buffer.alloc(0), mask: Buffer.alloc(0), glb: null, coverage: 0, error: (e as Error).message.slice(0, 200) };
         await opts.onPose?.(a);
         return a;
       }
