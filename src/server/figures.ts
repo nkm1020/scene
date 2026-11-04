@@ -44,14 +44,23 @@ export async function loadLook(roomId: string, memberId: string, name: string): 
  * in the background (Muse Image edits, SAM 3.1 masks), and the stage picks each one up as it lands.
  */
 export async function makeExpressions(memberId: string, roomId: string, current: Buffer, stamp: number, ledger: import("@/core/ledger").Ledger) {
-  const { createFigurePoses, createFigureFrames } = await import("@/core/figure");
+  const { createFigurePoses, createFigureFrames, FIGURE_FRAMES, FRAME_EDITS, FIGURE_POSES } = await import("@/core/figure");
   await updateFigure(memberId, { figure_status: "posing" });
+  const onFrame = async (name: string, a: FigurePoseAsset) => void (await storePose(memberId, roomId, stamp, a, name));
+  // frames drawn from the neutral pose (mouths, blink, the turnaround) start at once, beside the expressions; only the
+  // second half of each expression waits for its pose. About half the wall time, which keeps it inside one function.
+  const fromPose = FIGURE_FRAMES.filter((f) => (FIGURE_POSES as readonly string[]).includes(FRAME_EDITS[f].from) && FRAME_EDITS[f].from !== "neutral");
+  const early = FIGURE_FRAMES.filter((f) => !fromPose.includes(f));
   try {
-    const poses = await createFigurePoses(current, { ledger, onPose: async (a) => void (await storePose(memberId, roomId, stamp, a)) });
-    await updateFigure(memberId, { figure_status: "ready" });
-    const images: Record<string, Buffer> = { neutral: current };
-    for (const p of poses) if (p.image.length) images[p.pose] = p.image;
-    await createFigureFrames(images, { ledger, onFrame: async (name, a) => void (await storePose(memberId, roomId, stamp, a, name)) });
+    await Promise.all([
+      createFigureFrames({ neutral: current }, { ledger, frames: early, onFrame }),
+      createFigurePoses(current, { ledger, onPose: async (a) => void (await storePose(memberId, roomId, stamp, a)) }).then(async (poses) => {
+        await updateFigure(memberId, { figure_status: "ready" });
+        const images: Record<string, Buffer> = {};
+        for (const p of poses) if (p.image.length) images[p.pose] = p.image;
+        await createFigureFrames(images, { ledger, frames: fromPose, onFrame });
+      }),
+    ]);
   } catch (e) {
     console.error("expressions failed", e);
     await updateFigure(memberId, { figure_status: "ready" });
