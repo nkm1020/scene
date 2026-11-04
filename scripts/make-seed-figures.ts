@@ -17,6 +17,7 @@ const save = (dir: string, a: FigurePoseAsset, name: string = a.pose) => {
   writeFileSync(path.join(dir, `${name}.png`), a.image);
   writeFileSync(path.join(dir, `${name}.webp`), a.cutout);
   writeFileSync(path.join(dir, `${name}.mask.png`), a.mask);
+  if (a.head) writeFileSync(path.join(dir, `${name}.head.webp`), a.head);
   if (a.glb) writeFileSync(path.join(dir, `${name}.glb`), a.glb);
   console.log(`  ${path.basename(dir)} ${name}: mask ${(a.coverage * 100).toFixed(0)}%${a.glb ? `, glb ${(a.glb.length / 1e6).toFixed(1)} MB` : skip3d ? "" : ` 3D FAILED ${a.error}`}`);
 };

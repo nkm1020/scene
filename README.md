@@ -2,7 +2,7 @@
 
 # Scene: your group chat, performed
 
-A group chat with a new layout. You sit at a round table in a miniature stop-motion dining room with your friends as clay figures, seen from your own seat. When a message arrives, you turn to its sender and they say it to you in their own voice, the line in a bubble over their head; everyone else at the table turns and reacts. Your own lines appear at the bottom, where you said them. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
+A group chat with a new layout. You sit at a round table in a miniature stop-motion dining room with your friends as clay figures, seen from your own seat. When a message arrives, its sender says it in their own voice, the line in a bubble over their head, turning their head to whoever the line is for (you, a friend, or the whole table); everyone else turns their head to the speaker and reacts, and the camera frames the two people in the exchange. Your own lines appear at the bottom, where you said them. Missed the chat? Press play and the table acts it out, directed by **Muse Spark**. Every spoken line is listened to by **Muse Voice Transcribe** and only plays if it matches the message: **it says what you said, nothing else.**
 
 Theme: **Build for Your World** · Track: Indie Developer · Meta AI Developer Hackathon 2026
 
@@ -15,10 +15,11 @@ Turn the external voice off and Scene still works: the figures, the performance 
 | What you see | Made by |
 |---|---|
 | **Your figure.** Three words become a clay figurine, then six more versions of the same figurine: happy, laughing, surprised, annoyed, sad, asleep. Then stop-motion replacement frames: mouth shapes, a blink, a groggy wake-up, the other half of each expression. The table runs at 12 pictures a second and swaps them like a stop-motion film swaps faces. | **Muse Image** sculpts the figurine and edits it into each expression (same character). **SAM 3.1** masks the figurine in every image. **SAM 3D Objects** lifts each masked image into a mesh that sits at the table. |
+| **Heads that turn, bodies that stay.** Everyone sits facing the table; only heads turn: the speaker to whoever the line is for, the others to the speaker. Each figure has front, three-quarter and side views (mirrored for the other way), and a replacement head can sit on any of them, the way stop-motion puppets swap heads. | **Muse Image** draws the turnaround views (and a talking mouth for the turned ones). **SAM 3.1** finds each picture's head (one call for "head", one for "face", unioned; code makes it one solid lump), and the stage puts one picture's head on another's body, lined up at the chin (`src/core/heads.ts`). |
 | **The set.** A miniature dining room in the same clay look as the cast: walls, floor, tabletop, a birthday cake with lit candles, a teapot, a place laid at every seat. | **Muse Image** paints the four walls, the floor and the tabletop as clay set photographs and sculpts the props; **SAM 3.1** cuts the props out (`scripts/make-set.ts`, about $0.15 once). |
 | **Dress your figure; the face never changes.** Like an avatar builder: open Hair, Top or Extras and six options appear, drawn on your own figure. Or say it ("빨간 비니 씌워줘"). Whatever you pick, your face stays pixel for pixel. | **Muse Image** draws every option on your figure. **SAM 3.1** found your face once; code pastes it back onto each edit (glasses and hat brims, cut out by SAM 3.1, stay on top). Said changes: **Voice Transcribe** writes them down, **Muse Spark** turns them into one edit, `validateSaid` checks it. |
 | **Demo friends.** Alone in a room? Seat Sam, Mina or Jay. They answer what you post, in character, and their replies are performed like anyone's. | **Muse Spark** proposes up to two replies; `validateReplies` keeps only short lines from friends who are at the table. |
-| **The performance.** Who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. |
+| **The performance.** Who each line is said to (so the right heads turn); who speaks how; who laughs, who looks down, who wakes up when their name comes up; where the camera goes; how long the pause before the punchline is. | **Muse Spark 1.3** reads the whole missed segment and directs every figure on every line, in one call. Its output has no field that can hold words. Live lines use a rule table: someone called by name, else whoever spoke before. |
 | **Talking.** Hold to talk; your words become the message. | **Muse Voice Transcribe**. |
 | **The guarantee.** A line plays in a voice only if it says exactly the message. | **Muse Voice Transcribe** listens to every synthesized line and compares it with the message. |
 | **Consent.** Only your own voice can be registered. | **Muse Voice Transcribe** checks that you read the three sentences shown. |
@@ -64,9 +65,9 @@ Receive (once per message, shared by the room)
   live staging: rule table (punctuation, emoji, caps, names) ─▶ speaker's expression, listeners' reactions
 
 Replay (missed messages)
-  Muse Spark 1.3 directs the whole segment in one call: per line the speaker's expression, gesture, camera and pause,
+  Muse Spark 1.3 directs the whole segment in one call: per line who it is said to, the speaker's expression, gesture, camera and pause,
   and each listener's reaction (expression + where they look; a dozing friend wakes when the line is about them)
-  ─▶ validate_directions (D1 one per line, in order · D2 values in range · D3 budget · D4 no text anywhere · D5 reactions
+  ─▶ validate_directions (D1 one per line, in order · D2 values in range, `to` is someone else at the table · D3 budget · D4 no text anywhere · D5 reactions
      only from real listeners, once each) ─▶ up to 3 attempts with the errors fed back ─▶ else the rule table
 ```
 

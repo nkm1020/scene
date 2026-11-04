@@ -35,6 +35,8 @@ export interface Reaction {
 
 export interface Direction {
   message_id: string;
+  /** who the speaker is talking to: a member_id (you included), or "all" for the whole table */
+  to?: string;
   emotion: Emotion;
   gesture: Gesture;
   camera: Camera;
@@ -51,9 +53,28 @@ export interface ValidationError {
 
 const mentions = (text: string, name: string) => name.length >= 2 && new RegExp(`(^|[^\\p{L}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^\\p{L}]|$)`, "iu").test(text);
 
+/** Said to someone by name: "Jay, …", "…, Jay?", "@Jay", "민아야" (a name only mentioned, as in "don't tell Jay", is not). */
+const addressed = (text: string, name: string) => {
+  if (name.length < 2) return false;
+  const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\s*@?${n}(?![\\p{L}])\\s*[,!?:~]|^\\s*@?${n}\\s*$|[,，]\\s*${n}\\s*[?!.~]*\\s*$|@${n}(?![\\p{L}])|${n}(아|야)(?![\\p{L}])`, "iu").test(text);
+};
+
 // ───────────────────────── rule table (live path, 0 ms, no model) ─────────────────────────
 
-export function ruleDirection(m: ChatMessage, roster: RosterMember[] = []): Direction {
+/**
+ * Who a line is said to, without a model: someone it calls by name; else whoever spoke just before (a group chat
+ * mostly answers the line above); a second line in a row goes to the same person as the first; else the whole table.
+ */
+export function ruleAddressee(m: ChatMessage, roster: RosterMember[], prev?: { sender_id: string; to?: string } | null): string {
+  const named = roster.find((r) => r.member_id !== m.sender_id && addressed(m.text, r.name));
+  if (named) return named.member_id;
+  if (prev && prev.sender_id !== m.sender_id) return prev.sender_id;
+  if (prev && prev.sender_id === m.sender_id && prev.to) return prev.to;
+  return "all";
+}
+
+export function ruleDirection(m: ChatMessage, roster: RosterMember[] = [], prev?: { sender_id: string; to?: string } | null): Direction {
   const t = m.text.trim();
   const letters = t.replace(/[^A-Za-z]/g, "");
   const upperRatio = letters.length >= 4 ? letters.replace(/[^A-Z]/g, "").length / letters.length : 0;
@@ -78,9 +99,12 @@ export function ruleDirection(m: ChatMessage, roster: RosterMember[] = []): Dire
       if (!r.present && !named) return { member_id: r.member_id, pose: "away" as const, look: "down" as const };
       return { member_id: r.member_id, pose: named ? ("surprised" as const) : emotion === "laughing" ? ("happy" as const) : ("neutral" as const), look: "speaker" as const };
     });
-  return { message_id: m.id, emotion, gesture, camera: emotion === "surprised" || emotion === "angry" ? "close" : "room", pause_ms, reactions };
+  const to = roster.length ? ruleAddressee(m, roster, prev) : "all";
+  return { message_id: m.id, to, emotion, gesture, camera: emotion === "surprised" || emotion === "angry" ? "close" : "room", pause_ms, reactions };
 }
 
 export function ruleDirections(messages: ChatMessage[], roster: RosterMember[] = []): Direction[] {
-  return messages.map((m) => ruleDirection(m, roster));
+  const out: Direction[] = [];
+  messages.forEach((m, i) => out.push(ruleDirection(m, roster, i ? { sender_id: messages[i - 1].sender_id, to: out[i - 1].to } : null)));
+  return out;
 }

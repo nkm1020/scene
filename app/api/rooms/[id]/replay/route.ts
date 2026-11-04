@@ -51,7 +51,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       run.directions.map((d) =>
         db()
           .from("renders")
-          .update({ emotion: d.emotion, gesture: d.gesture, camera: d.camera, pause_ms: d.pause_ms, reactions: d.reactions ?? null, direction_source: run.source })
+          .update({ emotion: d.emotion, gesture: d.gesture, camera: d.camera, pause_ms: d.pause_ms, reactions: d.reactions ?? null, addressee: d.to ?? null, direction_source: run.source })
           .eq("message_id", d.message_id),
       ),
     );

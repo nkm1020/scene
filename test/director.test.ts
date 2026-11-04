@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDirections, ruleDirection, ruleDirections, directSegment, MAX_SEGMENT } from "../src/core/director";
+import { validateDirections, ruleDirection, ruleDirections, ruleAddressee, directSegment, MAX_SEGMENT } from "../src/core/director";
 import { SEED_MESSAGES } from "../src/core/seed";
 
 const msgs = SEED_MESSAGES.slice(0, 3);
@@ -127,5 +127,34 @@ describe("reactions (D5)", () => {
     const d2 = ruleDirection({ id: "y", sender_id: "sam", text: "everyone hide in the kitchen" }, roster);
     expect(d2.reactions?.find((r) => r.member_id === "jay")?.pose).toBe("away");
     expect(d2.reactions?.find((r) => r.member_id === "mina")?.look).toBe("speaker");
+  });
+});
+
+describe("who a line is said to (to)", () => {
+  const roster = [
+    { member_id: "sam", name: "Sam", present: true },
+    { member_id: "mina", name: "Mina", present: true },
+    { member_id: "jay", name: "Jay", present: false },
+  ];
+  const three = SEED_MESSAGES.slice(0, 3);
+  const dirs = (to: (string | undefined)[]) => ({
+    directions: three.map((m, i) => ({ message_id: m.id, ...(to[i] === undefined ? {} : { to: to[i] }), emotion: "neutral", gesture: "none", camera: "room", pause_ms: 300 })),
+  });
+  it("accepts the whole table or someone else at it", () => {
+    expect(validateDirections(three, dirs(["all", "sam", "mina"]), roster).ok).toBe(true);
+  });
+  it("D2: rejects talking to yourself or to someone not at the table", () => {
+    const errs = validateDirections(three, dirs(["sam", "ghost", "all"]), roster).errors;
+    expect(errs.filter((e) => e.code === "D2").length).toBe(2);
+  });
+  it("rule table: called by name, else whoever spoke before, else everyone", () => {
+    expect(ruleAddressee({ id: "a", sender_id: "sam", text: "Jay, you coming?" }, roster, null)).toBe("jay");
+    expect(ruleAddressee({ id: "b", sender_id: "sam", text: "you coming, Mina?" }, roster, { sender_id: "jay" })).toBe("mina");
+    expect(ruleAddressee({ id: "c", sender_id: "sam", text: "DO NOT tell Jay" }, roster, { sender_id: "mina" })).toBe("mina");
+    expect(ruleAddressee({ id: "d", sender_id: "sam", text: "and bring candles" }, roster, { sender_id: "sam", to: "jay" })).toBe("jay");
+    expect(ruleAddressee({ id: "e", sender_id: "sam", text: "hi all" }, roster, null)).toBe("all");
+    const seq = ruleDirections(SEED_MESSAGES, roster).map((d) => d.to);
+    expect(seq.slice(0, 4)).toEqual(["all", "sam", "mina", "sam"]);
+    expect(validateDirections(SEED_MESSAGES, { directions: ruleDirections(SEED_MESSAGES, roster) }, roster).ok).toBe(true);
   });
 });

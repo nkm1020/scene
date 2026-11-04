@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createStage, type Stage, type PerformItem, type StageMember, type FigureAssets } from "@/stage3d/engine";
-import { ruleDirection } from "@/core/rules";
+import { ruleAddressee, ruleDirection } from "@/core/rules";
 import { browserDb } from "./supabase";
 import { api, loadCreds, saveCreds, lastSeen, setLastSeen, type Creds } from "./api";
 import { Recorder } from "./audio";
@@ -28,11 +28,21 @@ type Render = {
   similarity: number | null;
   heard: string | null;
   reactions?: { member_id: string; pose: any; look: any }[] | null;
+  addressee?: string | null;
 };
 type RoomState = { room: { id: string; name: string; is_demo: boolean }; members: Member[]; messages: Message[]; renders: Render[] };
 
 
-function toItem(m: Message, r: Render | undefined, roster?: { member_id: string; name: string; present: boolean }[]): PerformItem {
+/** Who a line is said to: the director's choice when stored, else the rule table (someone it names, or whoever spoke before). */
+function addressee(m: Message, r: Render | undefined, roster: { member_id: string; name: string; present: boolean }[] | undefined, history: Message[]): string {
+  if (r?.addressee) return r.addressee;
+  if (!roster) return "all";
+  const before = history.filter((x) => x.seq < m.seq || (x.seq === m.seq && x.id !== m.id && x.created_at < m.created_at));
+  const prev = [...before].reverse().find((x) => x.member_id !== m.member_id);
+  return ruleAddressee({ id: m.id, sender_id: m.member_id, text: m.text }, roster, prev ? { sender_id: prev.member_id } : null);
+}
+
+function toItem(m: Message, r: Render | undefined, roster?: { member_id: string; name: string; present: boolean }[], history: Message[] = []): PerformItem {
   // Reactions: the director's (Spark) when stored, else the rule table with live presence.
   const reactions = (r?.reactions ?? (roster ? ruleDirection({ id: m.id, sender_id: m.member_id, text: m.text }, roster).reactions : []) ?? []).map((x) => ({
     memberId: x.member_id,
@@ -41,6 +51,7 @@ function toItem(m: Message, r: Render | undefined, roster?: { member_id: string;
   }));
   return {
     reactions,
+    to: addressee(m, r, roster, history),
     messageId: m.id,
     memberId: m.member_id,
     text: m.text,
@@ -151,7 +162,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         if (early) {
           earlyRenders.current.delete(m.id);
           if (modeRef.current === "idle") {
-            liveQueue.current.push(toItem(m, early, roster()));
+            liveQueue.current.push(toItem(m, early, roster(), stateRef.current?.messages));
             void pump();
           }
         } else if (m.member_id !== creds.memberId) stage.current?.setWaiting(m.member_id, true);
@@ -172,7 +183,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         if (modeRef.current !== "idle") return; // replay will cover it
         // Your own line plays too, in the small mirror: you hear what your friends hear.
         stage.current?.setWaiting(msg.member_id, false);
-        liveQueue.current.push(toItem(msg, r, roster()));
+        liveQueue.current.push(toItem(msg, r, roster(), stateRef.current?.messages));
         void pump();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `room_id=eq.${roomId}` }, () => {
@@ -221,7 +232,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       );
       const s = await reload();
       const byId = new Map(s.renders.map((r) => [r.message_id, r]));
-      const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id), roster()));
+      const items = s.messages.filter((m) => m.seq > seen).slice(-40).map((m) => toItem(m, byId.get(m.id), roster(), s.messages));
       setMode("replaying");
       const ctl = stage.current.play(items, { speed, onItem: (i) => setProgress({ i: i + 1, n: items.length }) });
       (window as any).__sceneCtl = ctl;

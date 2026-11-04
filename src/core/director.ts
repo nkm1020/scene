@@ -12,7 +12,7 @@ import { EMOTIONS, GESTURES, CAMERAS, POSES, LOOKS, ruleDirections, type ChatMes
 
 export const MAX_SEGMENT = 40;
 export const MAX_ATTEMPTS = 3;
-const ALLOWED_KEYS = new Set(["message_id", "emotion", "gesture", "camera", "pause_ms", "reactions"]);
+const ALLOWED_KEYS = new Set(["message_id", "to", "emotion", "gesture", "camera", "pause_ms", "reactions"]);
 const REACTION_KEYS = new Set(["member_id", "pose", "look"]);
 
 // ───────────────────────── validator (fixed checkpoint) ─────────────────────────
@@ -75,6 +75,11 @@ export function validateDirections(
     if (!GESTURES.includes(d.gesture)) errors.push({ code: "D2", message_id: d.message_id, message: `gesture "${d.gesture}" not allowed`, fix_hint: GESTURES.join("|") });
     if (!CAMERAS.includes(d.camera)) errors.push({ code: "D2", message_id: d.message_id, message: `camera "${d.camera}" not allowed`, fix_hint: CAMERAS.join("|") });
     if (!Number.isInteger(d.pause_ms) || d.pause_ms < 0 || d.pause_ms > 1500) errors.push({ code: "D2", message_id: d.message_id, message: `pause_ms ${d.pause_ms} out of range`, fix_hint: "integer 0..1500" });
+    // to: the whole table, or someone at it who is not the speaker
+    if (d.to !== undefined && d.to !== "all") {
+      if (typeof d.to !== "string" || (roster.length && !memberIds.has(d.to))) errors.push({ code: "D2", message_id: d.message_id, message: `to "${d.to}" is not at the table`, fix_hint: `"all" or a roster member_id` });
+      else if (d.to === senderOf.get(d.message_id)) errors.push({ code: "D2", message_id: d.message_id, message: "a speaker cannot talk to themself", fix_hint: `"all" or another member_id` });
+    }
   });
   // D5: reactions name real listeners (not the speaker), once each, with allowed pose/look
   dirs.forEach((d) => {
@@ -125,9 +130,10 @@ export function directionsSchema(roster: RosterMember[]) {
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["message_id", "emotion", "gesture", "camera", "pause_ms", "reactions"],
+            required: ["message_id", "to", "emotion", "gesture", "camera", "pause_ms", "reactions"],
             properties: {
               message_id: { type: "string" },
+              to: roster.length ? { type: "string", enum: [...roster.map((r) => r.member_id), "all"] } : { type: "string" },
               emotion: { type: "string", enum: [...EMOTIONS] },
               gesture: { type: "string", enum: [...GESTURES] },
               camera: { type: "string", enum: [...CAMERAS] },
@@ -145,6 +151,7 @@ export const DIRECTIONS_SCHEMA = directionsSchema([]);
 const SYSTEM = `You are the stage director for Scene. Friends in a group chat are clay figurines on a table; each figurine performs its owner's messages aloud.
 You receive the roster (who is at the table, and who is connected right now) and a missed segment of the chat.
 For EVERY message, in the original order, direct the whole table:
+- to: who the speaker is talking to, so the figures look at the right person: the member_id of the one they answer, ask, tease or name, or "all" when it is for the whole table. Read the thread: most lines answer someone. Never the speaker.
 - emotion of the speaker: one of ${EMOTIONS.join(", ")}. Read the whole conversation: irony, running jokes, who is teasing whom.
 - gesture of the speaker: one of ${GESTURES.join(", ")}
 - camera: "close" for punchlines, reveals and strong reactions; otherwise "room"

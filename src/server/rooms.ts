@@ -41,6 +41,7 @@ export async function forkDemoRoom(): Promise<string> {
       message_id: msgMap.get(r.message_id)!,
       room_id: id,
       reactions: Array.isArray(r.reactions) ? r.reactions.map((x: any) => ({ ...x, member_id: idMap.get(x.member_id) ?? x.member_id })) : r.reactions,
+      addressee: r.addressee ? idMap.get(r.addressee) ?? r.addressee : r.addressee,
       updated_at: new Date().toISOString(),
     }));
   if (rows.length) await db().from("renders").insert(rows).throwOnError();

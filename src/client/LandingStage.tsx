@@ -23,6 +23,7 @@ function toItem(id: string, memberId: string, text: string, d: ReturnType<typeof
     emotion: d.emotion,
     gesture: d.gesture,
     camera: d.camera,
+    to: d.to,
     pauseMs: d.pause_ms + 250,
     status: isSilent(text) ? "silent" : "verified",
     reactions: (d.reactions ?? []).map((r) => ({ memberId: r.member_id, pose: r.pose, look: r.look })),

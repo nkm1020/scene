@@ -13,7 +13,7 @@ export default function Lab() {
   useEffect(() => {
     if (!host.current) return;
     const stage = createStage(host.current, { members: SEED_STAGE_MEMBERS(glb), viewerId: null });
-    const dirs = ruleDirections(SEED_MESSAGES);
+    const dirs = ruleDirections(SEED_MESSAGES, SEED_STAGE_MEMBERS(false).map((m) => ({ member_id: m.id, name: m.name, present: m.present })));
     const ids = ["sam", "mina", "jay"];
     const items: PerformItem[] = SEED_MESSAGES.map((m, i) => ({
       messageId: m.id,
@@ -22,6 +22,7 @@ export default function Lab() {
       emotion: dirs[i].emotion,
       gesture: dirs[i].gesture,
       camera: dirs[i].camera,
+      to: dirs[i].to,
       pauseMs: dirs[i].pause_ms + 300,
       status: isSilent(m.text) ? "silent" : "captions_only",
       flags: ["voice_disabled"],
