@@ -320,6 +320,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
       />
     );
 
+  const playingSeq = playing ? state.messages.find((m) => m.id === playing)?.seq ?? null : null;
   const ribbonCss = state.members.map((m) => `.room .s3-name[data-m="${m.id}"]{--rib:${ribbonOf(state.members, m.id)}}`).join("");
   return (
     <div className="room">
@@ -344,7 +345,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         </div>
       </header>
       <div className="stage-host" ref={stageHost}>
-        {mode === "idle" && missed.length > 0 && (
+        {mode === "idle" && !playing && missed.length > 0 && (
           <button className="missed-pill" onClick={playMissed}>
             <Icon name="play" />
             <span className="what">Play {missed.length} missed</span>
@@ -359,12 +360,8 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         {mode === "replaying" && (
           <div className="slate" role="status">
             <span className="edge">
-              {progress && (
-                <b>
-                  {progress.i}/{progress.n}
-                </b>
-              )}
-              {progress ? " · " : ""}
+              {playingSeq !== null && <b>Frame {frameNo(playingSeq)} · </b>}
+              {progress ? `${progress.i}/${progress.n} · ` : ""}
               {directorNote}
             </span>
             <button
@@ -402,6 +399,7 @@ export default function RoomApp({ roomId }: { roomId: string }) {
         missed={missed}
         playing={playing}
         canReplay={mode === "idle"}
+        onOpenChange={(o) => stage.current?.setInset(o && window.innerWidth >= 1024 ? 472 : 0)}
         lineTo={(m) => addressee(m, renderOf.get(m.id), roster(), state.messages)}
         onReplay={(m) => void replayOne(m)}
       />
@@ -426,6 +424,7 @@ function FilmStrip({
   canReplay,
   lineTo,
   onReplay,
+  onOpenChange,
 }: {
   messages: Message[];
   members: Member[];
@@ -436,6 +435,7 @@ function FilmStrip({
   canReplay: boolean;
   lineTo: (m: Message) => string;
   onReplay: (m: Message) => void;
+  onOpenChange: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [dragH, setDragH] = useState<number | null>(null);
@@ -451,6 +451,11 @@ function FilmStrip({
   useEffect(() => {
     if (open && list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [open]);
+  useEffect(() => onOpenChange(open), [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  // on a phone the open strip covers most of the stage: when the table starts performing, fold it back to the peek
+  useEffect(() => {
+    if (playing && window.innerWidth < 1024) setOpen(false);
+  }, [playing]);
   useEffect(() => {
     if (!open || !playing) return;
     list.current?.querySelector(`[data-id="${playing}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });

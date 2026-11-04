@@ -515,6 +515,8 @@ export class Stage {
   private look = new THREE.Vector3(0, TABLE_Y + 0.1, -0.3);
   private baseFov = 30;
   private fov = 30;
+  private inset = 0; // px on the left of the picture that something covers (the chat strip on a wide screen)
+  private insetGoal = 0;
   private shotCamera: Camera = "room";
   /** The camera move in progress: an S curve from where the camera was to the new shot (times in ms). */
   private move = { t0: 0, dur: 0, p0: new THREE.Vector3(), v0: new THREE.Vector3(), p1: new THREE.Vector3(0, TABLE_Y + 0.1, -0.3), f0: 56, fv0: 0, f1: 56 };
@@ -639,13 +641,26 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.composer?.setPixelRatio(this.renderer.getPixelRatio());
     this.composer?.setSize(w, h);
-    this.camera.aspect = w / h;
+    this.applyView();
     // a normal lens from further back, not a wide one up close: straight lines stay straight, faces keep their shape
     // (portrait phones get a little more height so the speaker fits)
     this.baseFov = w / h >= 1 ? 34 : 42;
     this.shot(this.focus, this.shotCamera, this.focusTo, true); // a new frame size cuts straight to the shot
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
+  }
+
+  /** An off-centre lens (a view offset) that frames the table in the part of the picture nothing covers. */
+  private applyView() {
+    const w = this.root.clientWidth || 360, h = this.root.clientHeight || 640;
+    this.camera.aspect = (w + this.inset) / h;
+    if (this.inset > 0.5) this.camera.setViewOffset(w + this.inset, h, 0, 0, w, h);
+    else this.camera.clearViewOffset();
+  }
+
+  /** Something lies over the left of the stage (the chat strip on a wide screen): keep the table in the rest. */
+  setInset(px: number) {
+    this.insetGoal = Math.max(0, px);
   }
 
   private portrait() {
@@ -986,6 +1001,11 @@ export class Stage {
     const dt = 1 / FPS;
     for (const p of this.props) p.rotation.y = Math.atan2(this.camPos.x - p.position.x, this.camPos.z - p.position.z);
     this.sampleMove(now);
+    if (Math.abs(this.insetGoal - this.inset) > 0.5) {
+      this.inset += (this.insetGoal - this.inset) * 0.18;
+      if (Math.abs(this.insetGoal - this.inset) < 1) this.inset = this.insetGoal;
+      this.applyView();
+    }
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();

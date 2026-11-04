@@ -59,11 +59,12 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
    film itself, amber base with an orange-mask perforation rail, every message a numbered frame with yellow edge print
    (number, time, length, check, direction). One hairline weight; the edge-print yellow is the one bright control. */
 .room,.sheet-wrap{
-  --leader:#120a06; --base:#2a1509; --base-2:#341b0c; --base-3:#47260f; --mask:#b4561d;
+  --leader:#120a06; --base:#3a1d0b; --base-2:#47240e; --base-3:#5a2f12; --mask:#b4561d;
   --edge:#ffcd57; --ink:#fff3e3; --ink-2:#e6c8a6; --ink-3:#bf9b76; --tally:#ff5a43; --hair:rgba(255,205,87,.2);
   --ground:var(--leader); --surface:var(--base); --raised:var(--base-3); --rule:var(--hair); --control:var(--base-3);
   --text:var(--ink); --muted:var(--ink-2); --faint:var(--ink-3); --accent:var(--edge);
   --perf-v:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='14'%3E%3Cpath fill='%23fff' fill-rule='evenodd' d='M0 0h16v14H0zM4.6 4h6.8a1.1 1.1 0 0 1 1.1 1.1v3.8a1.1 1.1 0 0 1-1.1 1.1H4.6a1.1 1.1 0 0 1-1.1-1.1V5.1A1.1 1.1 0 0 1 4.6 4z'/%3E%3C/svg%3E");
+  --perf-paint:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='14'%3E%3Cpath fill='%23b4561d' d='M0 0h16v14H0z'/%3E%3Crect x='3.5' y='4' width='9' height='6' rx='1.1' fill='%230d0704'/%3E%3C/svg%3E");
   --font-sans:var(--font-film);
   color:var(--ink);
 }
@@ -133,9 +134,10 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
 .strip-head .count b{color:var(--edge);font-weight:600}
 .strip-head svg{flex:none;width:20px;height:20px;color:var(--ink-2);transition:transform .42s cubic-bezier(.16,1,.3,1)}
 .strip-sheet.open .strip-head svg{transform:rotate(180deg)}
-.frames{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;list-style:none;margin:0;padding:0 16px 12px;scrollbar-width:thin;scrollbar-color:var(--base-3) transparent}
+.strip-sheet.open .strip-head{box-shadow:inset 0 -1px 0 var(--hair)}
+.frames{flex:1;min-height:0;overflow-y:auto;-webkit-mask-image:linear-gradient(to bottom,transparent,#000 14px);mask-image:linear-gradient(to bottom,transparent,#000 14px);overscroll-behavior:contain;list-style:none;margin:0;padding:0 16px 12px;scrollbar-width:thin;scrollbar-color:var(--base-3) transparent}
 .frames::-webkit-scrollbar{width:6px}.frames::-webkit-scrollbar-thumb{background:var(--base-3);border-radius:3px}
-.frames li+li{border-top:1px solid var(--hair)}
+.frames li+li{border-top:3px solid var(--leader)} /* frame lines: the dark gap between exposures */
 .frame{display:block;width:100%;text-align:left;padding:12px 12px 13px;border-radius:2px;transition:background .5s cubic-bezier(.16,1,.3,1)}
 .frame:hover:not(:disabled){background:var(--base-2)}
 .frame:disabled{cursor:default;opacity:1}
@@ -146,8 +148,6 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
 .frame .line{margin:5px 0 6px;font-size:17px;line-height:1.35;color:var(--ink);overflow-wrap:anywhere;font-variation-settings:"wdth" 100}
 .frame .meta{color:var(--ink-3);flex-wrap:wrap;row-gap:2px}
 .frame .meta .ok{color:var(--edge)}
-.frame.missed{background:var(--leader)}
-.frame.missed .line{color:var(--ink-2)}
 .frame.missed .meta .miss{color:var(--edge)}
 .frame.playing{background:var(--base-3)}
 .frame.playing .fno{color:var(--ink)}
@@ -192,14 +192,14 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
 
 /* sheets that float over the room (add a friend, you): the same film base */
 .sheet-wrap{position:fixed;inset:0;background:rgba(8,4,2,.66);z-index:100;display:flex;align-items:flex-end;justify-content:center}
-.sheet{width:min(560px,100%);max-height:88dvh;overflow:auto;background:var(--base);border-radius:14px 14px 0 0;padding:16px 18px calc(24px + env(safe-area-inset-bottom));scrollbar-width:thin;scrollbar-color:var(--base-3) transparent}
+.sheet{width:min(560px,100%);max-height:88dvh;overflow:auto;background:var(--perf-paint) left top/16px 14px repeat-y local,var(--perf-paint) right top/16px 14px repeat-y local,var(--base);border-radius:14px 14px 0 0;padding:16px 30px calc(24px + env(safe-area-inset-bottom));scrollbar-width:thin;scrollbar-color:var(--base-3) transparent}
 .sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:20px;font-weight:650}
 .sheet section{padding:16px 0}
 .sheet section+section{border-top:1px solid var(--hair)}
 .sheet h3{font-size:16px;font-weight:650;margin:0 0 4px}
 .sheet .sub{font-size:14px;color:var(--ink-3);margin:0 0 12px}
 .sheet .ghost{background:var(--base-3);border-radius:10px}
-.sheet .ghost:hover{background:#56301a}
+.sheet .ghost:hover{background:#6a3816}
 .sheet input{background:var(--base-2);border-radius:10px}
 .thumb{height:64px}
 .friend-list{display:grid;gap:1px;border-radius:12px;overflow:hidden;background:var(--hair)}
@@ -211,7 +211,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:18px 0 8px}
 .friend-row .who span{display:block;font-size:14px;color:var(--ink-2);line-height:1.35}
 .friend-row .here{color:var(--ink-3)}
 .invite-row{display:flex;gap:8px}
-.invite-row input{flex:1;font-size:13px;color:var(--ink-2)}
+.invite-row input{flex:1;font-family:var(--font-film),system-ui,sans-serif;font-variation-settings:"wdth" 72;font-weight:600;font-size:12.5px;letter-spacing:.04em;color:var(--edge)}
 table.receipt{width:100%;border-collapse:collapse;font-size:13px}table.receipt td,table.receipt th{text-align:left;padding:8px 4px;border-bottom:1px solid var(--hair);font-variant-numeric:tabular-nums}table.receipt td:not(:first-child),table.receipt th:not(:first-child){text-align:right}table.receipt th{color:var(--ink-3);font-weight:400}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
